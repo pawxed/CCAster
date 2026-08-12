@@ -1,0 +1,46 @@
+name: Build .deb
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js v24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install Theos
+        run: |
+          git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+
+      - name: Install iOS 16.5 SDK
+        run: |
+          cd $HOME/theos/sdks
+          git clone --depth=1 --filter=blob:none --no-checkout https://github.com/xybp888/iOS-SDKs.git
+          cd iOS-SDKs
+          git sparse-checkout init --cone
+          git sparse-checkout set iPhoneOS16.5.sdk
+          git checkout
+          mv iPhoneOS16.5.sdk ..
+          cd .. && rm -rf iOS-SDKs
+
+      - name: Trust required Homebrew tap
+        run: |
+          brew trust aws/tap
+
+      - name: Install ldid
+        run: brew install ldid
+
+      - name: Build
+        run: make package FINALPACKAGE=1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CCaster-patch
+          path: packages/*.deb
