@@ -40,13 +40,6 @@ static CGFloat const kCCAPageIndicatorRestRightInset = -3.0;
 static CGFloat const kCCAPageIndicatorScrubRightInset = -3.0;
 static CGFloat const kCCAPageIndicatorMaxSlideOut = 24.0;
 
-static CGFloat const kCCAPagerViscosityResponse = 9.0;
-static CGFloat const kCCAPagerJelloVelocityResponse = 11.0;
-static CGFloat const kCCAPagerJelloVelocityToScale = 0.0030;
-static CGFloat const kCCAPagerJelloTensionToScale = 0.022;
-static CGFloat const kCCAPagerMaximumJelloScale = 0.025;
-static CGFloat const kCCAEditScrubModuleWrapperCenteringX = 81.0;
-static CGFloat const kCCAEditScrubModuleWrapperCenteringY = 118.0;
 static NSUInteger const kCCAMaxPages = 9;
 
 static NSHashTable<UIViewController *> *gOverlayControllers;
@@ -9761,7 +9754,6 @@ static void CCAOpenPendingConnectivityDetailFromPresentation(UIPresentationContr
     gCCAConnectivityPendingDetailIdentifier = nil;
     if (!identifier.length || !presentationController.presentedViewController) return;
 
-    (void)presentationController;
 }
 
 static void CCAResetConnectivityCompactTransforms(UIViewController *controller) {
