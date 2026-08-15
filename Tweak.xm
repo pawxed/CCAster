@@ -25,8 +25,7 @@ static BOOL const gCCAUseNativeOpeningCompensation = NO;
 static CGFloat const kCCARestingModuleOffset = -8.0;
 static CGFloat const kCCAEditingModuleOffset = -48.0;
 static NSUInteger const kCCAMinimumGridRows = 8;
-// CCUILayoutOptions is patched below so the real collection and every
-// CCAster-owned grid use the same compact geometry.
+
 static CGFloat kCCAGridCellSize = 67.0;
 static CGFloat kCCAGridGap = 12.0;
 static CGFloat const kCCAGridCellScale = 67.0 / 69.0;
@@ -40,9 +39,7 @@ static CGFloat const kCCAPageIndicatorScrubHostWidth = 58.0;
 static CGFloat const kCCAPageIndicatorRestRightInset = -3.0;
 static CGFloat const kCCAPageIndicatorScrubRightInset = -3.0;
 static CGFloat const kCCAPageIndicatorMaxSlideOut = 24.0;
-// The page remains obedient to indicator thresholds, but its small parallax
-// offset trails the finger slightly. Velocity adds a deliberately tiny,
-// direction-aware stretch to the single composited page.
+
 static CGFloat const kCCAPagerViscosityResponse = 9.0;
 static CGFloat const kCCAPagerJelloVelocityResponse = 11.0;
 static CGFloat const kCCAPagerJelloVelocityToScale = 0.0030;
@@ -87,10 +84,7 @@ static UIView *gCCAMediaTransitionHost = nil;
 static CGRect gCCAMediaCompactDestinationScreenFrame = {{0.0, 0.0}, {0.0, 0.0}};
 static CGRect gCCAMediaExpandedPresentationScreenFrame = {{0.0, 0.0}, {0.0, 0.0}};
 static CFTimeInterval gCCAMediaCompactSnapshotRefreshTime = 0.0;
-// Connectivity reuses the same live child hierarchy for its compact and
-// expanded presentations.  UIKit therefore flies those children between two
-// very different layouts.  Keep that hierarchy invisible during the native
-// transition and composite stable snapshots above it instead.
+
 static __weak UIViewController *gCCAConnectivityTransitionController = nil;
 static __weak UIViewController *gCCAConnectivityCompactController = nil;
 static __weak UIPresentationController *gCCAConnectivityTransitionPresentationController = nil;
@@ -153,10 +147,7 @@ static NSInteger const kCCAEditGridTag = 181020;
 static NSInteger const kCCAEditTouchShieldTag = 181021;
 static NSInteger const kCCAResizeButtonTag = 181022;
 static NSInteger const kCCAResizePresentationTag = 181023;
-// A drop that never became a drag and released within this distance of the
-// module's top-left corner (where the remove bubble sits) is treated as a
-// removal. Lets the remove bubble be a purely visual affordance so the whole
-// tile — critically the tiny 1x1s — stays grabbable for dragging.
+
 static CGFloat const kCCARemoveTapCornerRadius = 30.0;
 static NSInteger const kCCAResizeMaterialTag = 181024;
 static NSInteger const kCCAResizeBlurSnapshotTag = 181025;
@@ -293,9 +284,7 @@ static __weak UIView *gCCAActiveDragModuleView = nil;
 static NSString *gCCAActiveDragModuleIdentifier = nil;
 static BOOL gCCAResizeInProgress = NO;
 static __weak UIView *gCCAActiveResizeModuleView = nil;
-// One physical home press/swipe can reach both CCAster's bottom-zone pan and
-// the native dismissal seams. Whichever exits edit mode first opens this
-// window so the sibling request from the same gesture cannot also close CC.
+
 static CFTimeInterval gCCAEditExitConsumedUntil = 0;
 static CFTimeInterval gCCAExpandedChromeRevealUntil = 0;
 static NSUInteger gCCACurrentPage = 0;
@@ -307,7 +296,7 @@ static CGFloat gCCAPagerInteractiveProgress = 0.0;
 static CFTimeInterval gCCAPagerInteractiveBeganTime = 0.0;
 static CGFloat gCCAPagerHeldScale = 1.0;
 static CGFloat gCCAPagerHeldAlphaFactor = 1.0;
-static CGFloat gCCAPagerViscousProgress = 0.0;
+static CGFloat gCCAPagerViscousProgress = progress;
 static CGFloat gCCAPagerPreviousRawProgress = 0.0;
 static CGFloat gCCAPagerFilteredVelocity = 0.0;
 static CGFloat gCCAPagerJelloScaleX = 1.0;
@@ -392,31 +381,7 @@ static BOOL CCAIsConnectivityTransitionLeafController(UIViewController *controll
 static void CCASetConnectivityProxyPressed(UIControl *sender, BOOL pressed);
 
 static UIPanGestureRecognizer *CCAFindActiveControlCenterPresentationPan(UIView *root) {
-    if (!root) return nil;
-    NSMutableArray<UIView *> *queue = [NSMutableArray arrayWithObject:root];
-    UIPanGestureRecognizer *fallback = nil;
-    while (queue.count) {
-        UIView *view = queue.firstObject;
-        [queue removeObjectAtIndex:0];
-        for (UIGestureRecognizer *gesture in view.gestureRecognizers) {
-            if (![gesture isKindOfClass:[UIPanGestureRecognizer class]] ||
-                [objc_getAssociatedObject(gesture, kCCAOwnGestureKey) boolValue] ||
-                gesture.numberOfTouches == 0 ||
-                (gesture.state != UIGestureRecognizerStateBegan && gesture.state != UIGestureRecognizerStateChanged)) continue;
-            UIPanGestureRecognizer *pan = (UIPanGestureRecognizer *)gesture;
-            CGPoint location = [pan locationInView:root];
-            CGPoint velocity = [pan velocityInView:root];
-            BOOL plausiblePull = location.x >= CGRectGetWidth(root.bounds) * 0.45 &&
-                location.y <= CGRectGetHeight(root.bounds) * 0.72 && velocity.y > -40.0;
-            if (!plausiblePull) continue;
-            NSString *name = NSStringFromClass(pan.class);
-            if ([name containsString:@"PanSystemGestureRecognizer"] ||
-                [name containsString:@"ControlCenter"] || [name containsString:@"StatusBar"]) return pan;
-            if (!fallback) fallback = pan;
-        }
-        [queue addObjectsFromArray:view.subviews];
-    }
-    return fallback;
+    (void)controller;
 }
 
 static NSString *CCAThemedPageIndicatorSymbolForPage(NSUInteger page);
@@ -698,9 +663,6 @@ static void CCAFinishNativeScrollOpeningStabilization(UIViewController *overlay)
     CATransform3D base = baseValue ? baseValue.CATransform3DValue : CATransform3DIdentity;
     objc_setAssociatedObject(overlay, kCCANativeScrollOpeningCompensationKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-    // State 2 means CCUI's bounds presentation has reached its resting value.
-    // Drop the inverse correction's stale presentation tree immediately; a
-    // model-only reset leaves the previous +114pt frame visible once more.
     [scrollView.layer removeAllAnimations];
     [duplicateHost.layer removeAllAnimations];
     [CATransaction begin];
@@ -711,9 +673,6 @@ static void CCAFinishNativeScrollOpeningStabilization(UIViewController *overlay)
     [CATransaction flush];
 }
 
-// Directly regenerating iOS 16's live provider can desynchronize its parallel
-// identifier/size state, producing stretched sliders and compact-view labels.
-// Keep provider mutation disabled until CCAster owns an independent preview map.
 static BOOL const gCCAUseNativeLiveReflow = NO;
 static NSMutableDictionary<NSString *, NSValue *> *gCCANativeLayoutRects;
 static NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *gCCACustomOrigins;
@@ -748,7 +707,6 @@ static void CCANormalizePreviewCornerRadii(UIView *root, CGSize moduleSize, CGFl
         [queue addObjectsFromArray:candidate.subviews];
     }
 }
-
 
 @interface CCALowBlurView : UIView
 @end
@@ -924,9 +882,7 @@ static BOOL CCARectArraysNearlyEqual(NSArray<NSValue *> *a, NSArray<NSValue *> *
 - (void)setLandingRects:(NSArray<NSValue *> *)landingRects {
     if (CCARectArraysNearlyEqual(_landingRects, landingRects)) return;
     _landingRects = [landingRects copy];
-    // The footprint is only state for fading the background cells. Drawing a
-    // second rounded outline reads as a module left behind and also exposes any
-    // transient disagreement between the visual grid and the native layout.
+
     self.landingLayer.path = nil;
     self.landingLayer.opacity = 0.0f;
     [self updateCircleVisibilityAnimated:!gCCADragInProgress];
@@ -968,14 +924,10 @@ static BOOL CCARectArraysNearlyEqual(NSArray<NSValue *> *a, NSArray<NSValue *> *
 @implementation CCAExpandedHitButton
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
     if (self.hidden || !self.userInteractionEnabled || self.alpha <= 0.01) return NO;
-    // 1x1 modules have almost no surface left once generous chrome zones are
-    // carved out — shrink their acceptance so the module stays draggable.
+
     BOOL small = [objc_getAssociatedObject(self, kCCASmallModuleChromeKey) boolValue];
     if (self.tag == kCCAResizeButtonTag) {
-        // Corner-based grabber for every size. Previously large modules accepted
-        // a 16pt-expanded (74pt) square that swallowed most of the tile; now the
-        // handle only claims a small square hugging the bottom-right corner, so
-        // the rest of the module — even a 1x1 — is free to start a drag.
+
         CGFloat cornerSize = small ? 26.0 : 34.0;
         CGRect corner = CGRectMake(CGRectGetWidth(self.bounds) - cornerSize,
                                    CGRectGetHeight(self.bounds) - cornerSize,
@@ -1042,10 +994,7 @@ static BOOL CCARectArraysNearlyEqual(NSArray<NSValue *> *a, NSArray<NSValue *> *
     if (!overlay) return [super hitTest:point withEvent:event];
     CGPoint overlayPoint = [self convertPoint:point toView:overlay.view];
     NSArray<UIViewController *> *modules = CCACollectModuleControllers(overlay);
-    // Pass 1: edit chrome always wins. Checking every module's buttons before
-    // any module surface prevents iteration order (or a stale button frame)
-    // from letting a neighboring module claim the touch, which previously fed
-    // remove-button taps to the overlay drag recognizer instead.
+
     for (UIViewController *module in modules) {
         if (module.view.hidden || module.view.alpha <= 0.01 || CCAModuleViewIsPageHidden(module.view)) continue;
         UIButton *remove = objc_getAssociatedObject(module.view, kCCARemoveButtonKey);
@@ -1079,7 +1028,7 @@ static BOOL CCARectArraysNearlyEqual(NSArray<NSValue *> *a, NSArray<NSValue *> *
             }
         }
     }
-    // Pass 2: module surfaces (drag/rearrange territory).
+    
     for (UIViewController *module in modules) {
         if (module.view.hidden || module.view.alpha <= 0.01 || CCAModuleViewIsPageHidden(module.view)) continue;
         if (CGRectContainsPoint(CGRectInset(CCAVisibleModuleFrame(module, overlay), -2.0, -2.0), overlayPoint)) {
@@ -1180,9 +1129,7 @@ static BOOL CCARectArraysNearlyEqual(NSArray<NSValue *> *a, NSArray<NSValue *> *
     CGPoint center = CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
     CGFloat diskRadius = level <= 0.25 ? 5.1 : 6.1;
     CGFloat innerRadius = 9.5;
-    // At the floor each ray is only a rounded capsule; at full brightness it
-    // extends a little beyond the stock sun.max silhouette, matching iOS 18's
-    // more expressive low-to-high ray travel.
+
     CGFloat outerRadius = 11.0 + 6.0 * level;
     UIBezierPath *disk = [UIBezierPath bezierPathWithOvalInRect:CGRectMake(center.x - diskRadius,
                                                                            center.y - diskRadius,
@@ -1310,7 +1257,6 @@ static BOOL CCAIsHomeButtonDevice(void) {
     return cached;
 }
 
-
 static BOOL CCAIsOverlayController(UIViewController *controller) {
     NSString *name = NSStringFromClass(controller.class);
     return [name containsString:@"ControlCenterOverlayViewController"] ||
@@ -1349,7 +1295,6 @@ static UIView *CCAPresentationWrapperForModuleController(UIViewController *contr
     }
     return controller.view.superview;
 }
-
 
 static void CCAHaptic(void) {
     if (!gHapticsEnabled) return;
@@ -1487,7 +1432,7 @@ static NSString *CCAPrettyNameForIdentifier(NSString *identifier) {
 
 static NSString *CCAFriendlyNameForIdentifier(NSString *identifier) {
     NSString *lower = identifier.lowercaseString;
-    // Needles verified against /System/Library/ControlCenter/Bundles on iOS 16.
+    
     NSDictionary<NSString *, NSString *> *known = @{
         @"ccaster.connectivity.airplane": @"Airplane Mode",
         @"ccaster.connectivity.wifi": @"Wi-Fi",
@@ -1836,8 +1781,7 @@ static void CCAUpdateSliderGlyphColor(UIView *slider, float value, BOOL animate)
     for (UIView *ancestor = slider; ancestor; ancestor = ancestor.superview) {
         if (ancestor.accessibilityLabel.length) [identity appendFormat:@" %@", ancestor.accessibilityLabel.lowercaseString];
     }
-    // The flashlight intensity slider is accessibility-labelled "Brightness";
-    // never hand it the display slider's sun glyph or yellow theme.
+
     if ([identity containsString:@"flashlight"]) return;
     for (UIResponder *responder = slider.nextResponder; responder; responder = responder.nextResponder) {
         if (![responder isKindOfClass:[UIViewController class]]) continue;
@@ -1895,9 +1839,7 @@ static void CCAUpdateSliderGlyphColor(UIView *slider, float value, BOOL animate)
         }
         void (^changes)(void) = ^{
             host.tintColor = displayColor;
-            // The native iOS 16 glyph is a gray punch-out. Keep it hidden at
-            // every value and use the same SF-symbol overlay for both sides
-            // of the 20% threshold so the inactive state is genuinely white.
+
             host.alpha = 0.0;
             host.hidden = YES;
             if (imageView) {
@@ -1939,11 +1881,6 @@ static void CCAUpdateSliderGlyphColor(UIView *slider, float value, BOOL animate)
         return;
     }
 
-    // iOS 16 normally renders these glyphs as punch-outs, so changing the
-    // backing host's tint does not necessarily alter the composited pixels.
-    // Own one SF-symbol layer and drive its variable value directly. This is
-    // what gives the sun rays and speaker waves continuous level feedback,
-    // instead of snapping among a handful of unrelated static images.
     UIImageSymbolConfiguration *symbolConfiguration =
         [UIImageSymbolConfiguration configurationWithPointSize:24.0 weight:UIImageSymbolWeightRegular];
     CGFloat variableValue = MIN(1.0, MAX(0.0, value));
@@ -2000,10 +1937,7 @@ static void CCAUpdateSliderGlyphColor(UIView *slider, float value, BOOL animate)
         BOOL symbolStateChanged = previousSymbolState.length && ![previousSymbolState isEqualToString:symbolState];
 
         if (animate && symbolStateChanged && colorGlyph.image) {
-            // SymbolEffect.replace is not exposed by iOS 16. Recreate its
-            // compact replacement motion with independent outgoing/incoming
-            // symbol layers, while shared variable symbols continue tracking
-            // the slider without spawning animations on every touch sample.
+
             for (UIView *view in [slider.subviews copy]) {
                 if (view.tag == kCCASliderOutgoingGlyphTag) [view removeFromSuperview];
             }
@@ -2020,7 +1954,7 @@ static void CCAUpdateSliderGlyphColor(UIView *slider, float value, BOOL animate)
             colorGlyph.tintColor = displayColor;
             colorGlyph.alpha = 0.0;
             colorGlyph.transform = CGAffineTransformMakeScale(0.72, 0.72);
-            [UIView animateWithDuration:0.18 delay:0.0
+            [UIView animateWithDuration:0.0 delay:0.0
                                 options:UIViewAnimationOptionCurveEaseInOut |
                                         UIViewAnimationOptionBeginFromCurrentState |
                                         UIViewAnimationOptionAllowUserInteraction
@@ -2114,16 +2048,12 @@ static void CCAUpdateSliderOverscroll(UIView *slider, UIPanGestureRecognizer *ge
     }
     if (state != UIGestureRecognizerStateBegan && state != UIGestureRecognizerStateChanged) return;
 
-    // Brightness and volume use the tall continuous-slider presentation. Use
-    // window-space translation so deforming the slider cannot feed back into
-    // the gesture's own coordinate system.
     if (CGRectGetHeight(slider.bounds) <= CGRectGetWidth(slider.bounds) * 1.15) return;
     CGFloat startValue = [objc_getAssociatedObject(slider, kCCASliderOverscrollStartValueKey) doubleValue];
     CGFloat translationY = [gesture translationInView:slider.window].y;
     CGFloat rawValue = startValue - translationY / MAX(1.0, CGRectGetHeight(slider.bounds));
     CGFloat overshoot = rawValue > 1.0 ? rawValue - 1.0 : (rawValue < 0.0 ? -rawValue : 0.0);
-    // Rational resistance has no abrupt ceiling: every extra point still
-    // yields a little motion, but progressively less than the one before it.
+
     CGFloat pull = overshoot * 6.0;
     CGFloat resisted = pull / (1.0 + pull);
     BOOL pullingTop = rawValue > 1.0;
@@ -2171,8 +2101,7 @@ static UIViewController *CCAModuleControllerMatchingObject(UIViewController *ove
 }
 
 static CGRect CCAVisibleModuleFrame(UIViewController *module, UIViewController *overlay) {
-    // convertRect already walks the transformed wrapper hierarchy. Applying
-    // the edit translation again displaced hit testing and landing by 48pt.
+
     return [module.view convertRect:module.view.bounds toView:overlay.view];
 }
 
@@ -2344,23 +2273,9 @@ static void CCAResetGenericExpansionDismissal(void) {
 
 static void CCACompleteGenericExpansionDismissalIfReady(void) {
     if (!gCCAExpansionDismissalAnimatorFinished || !gCCAExpansionDismissalDidClose) return;
-    for (UIView *liveView in gCCAExpansionHiddenLiveViews) {
-        [liveView.superview layoutIfNeeded];
-        [liveView layoutIfNeeded];
-    }
-    [UIView performWithoutAnimation:^{
-        [gCCAExpansionHiddenLiveViews enumerateObjectsUsingBlock:^(UIView *liveView, NSUInteger index, __unused BOOL *stop) {
-            if (index < gCCAExpansionHiddenLiveAlphas.count) {
-                liveView.alpha = gCCAExpansionHiddenLiveAlphas[index].doubleValue;
-            }
-            if (index < gCCAExpansionHiddenLiveLayerOpacities.count) {
-                liveView.layer.opacity = gCCAExpansionHiddenLiveLayerOpacities[index].floatValue;
-            }
-        }];
-        [gCCAExpansionExpandedSnapshot removeFromSuperview];
-        [gCCAExpansionDismissalSnapshot removeFromSuperview];
-        [gCCAExpansionDismissalForegroundSnapshot removeFromSuperview];
-    }];
+    CCARestoreHiddenExpansionLiveViews();
+    CCADiscardExpandedDismissalSnapshot();
+    CCADiscardExpansionDismissalSnapshot();
     gCCAExpansionHiddenLiveViews = nil;
     gCCAExpansionHiddenLiveAlphas = nil;
     gCCAExpansionHiddenLiveLayerOpacities = nil;
@@ -2377,130 +2292,12 @@ static void CCAFreezeExpandedModuleForDismissal(UIViewController *presented) {
     if (!presented.view || !presented.view.superview || CGRectIsEmpty(presented.view.bounds)) return;
     [presented.view.superview layoutIfNeeded];
     [presented.view layoutIfNeeded];
-
-    UIView *expandedBackground = CCAFindSubviewWithClassName(presented.view, @"CCUIContentModuleBackgroundView");
-    UIView *contentContainer = CCAFindSubviewWithClassName(presented.view, @"CCUIContentModuleContentContainerView");
-    UIView *expandedSurface = contentContainer ?: expandedBackground;
-    UIView *snapshot = expandedSurface ? CCAWindowCropSnapshotView(expandedSurface) : nil;
-    CGRect snapshotFrame = expandedSurface
-        ? [expandedSurface convertRect:expandedSurface.bounds toView:presented.view.superview]
-        : presented.view.frame;
-    if (snapshot) {
-        snapshot.layer.cornerRadius = expandedSurface.layer.cornerRadius;
-        snapshot.layer.cornerCurve = kCACornerCurveContinuous;
-        snapshot.layer.masksToBounds = YES;
-    }
-    if (!snapshot) snapshot = CCACompositedSnapshotView(presented.view);
-    if (!snapshot) snapshot = CCAWindowCropSnapshotView(presented.view);
-    if (!snapshot) return;
-    UIWindow *window = expandedSurface.window ?: presented.view.window;
-    if (window && expandedSurface) {
-        snapshotFrame = [expandedSurface convertRect:expandedSurface.bounds toView:window];
-    } else if (window) {
-        snapshotFrame = [presented.view convertRect:presented.view.bounds toView:window];
-    }
-    snapshot.frame = snapshotFrame;
-    snapshot.userInteractionEnabled = NO;
-    if (window) [window addSubview:snapshot];
-    else [presented.view.superview insertSubview:snapshot aboveSubview:presented.view];
-    gCCAExpansionExpandedSnapshot = snapshot;
-
-    if (window && contentContainer) {
-        CGRect contentFrame = [contentContainer convertRect:contentContainer.bounds toView:window];
-        gCCAExpansionExpandedContentAnchorWindow = CGPointMake(CGRectGetMidX(contentFrame), CGRectGetMidY(contentFrame));
-    } else {
-        gCCAExpansionExpandedContentAnchorWindow = CGPointMake(CGRectGetMidX(snapshotFrame), CGRectGetMidY(snapshotFrame));
-    }
-    NSMutableArray<UIView *> *liveViews = [NSMutableArray array];
-    if (expandedSurface) [liveViews addObject:expandedSurface];
-    NSMutableArray<UIView *> *queue = [NSMutableArray arrayWithArray:presented.view.subviews];
-    while (queue.count) {
-        UIView *candidate = queue.firstObject;
-        [queue removeObjectAtIndex:0];
-        BOOL alreadyCovered = expandedSurface && [candidate isDescendantOfView:expandedSurface];
-        NSString *className = NSStringFromClass(candidate.class);
-        NSString *text = nil;
-        SEL textSelector = NSSelectorFromString(@"text");
-        if ([candidate respondsToSelector:textSelector]) {
-            @try {
-                id value = ((id (*)(id, SEL))objc_msgSend)(candidate, textSelector);
-                if ([value isKindOfClass:[NSString class]]) text = value;
-            } @catch (__unused NSException *exception) {}
-        }
-        BOOL textSurface = text.length || [className containsString:@"Label"] || [className containsString:@"Header"];
-        if (textSurface && candidate.window == window) {
-            CGRect candidateFrame = [candidate convertRect:candidate.bounds toView:window];
-            BOOL intersects = CGRectIntersectsRect(candidateFrame, snapshotFrame) ||
-                CGRectIntersectsRect(candidateFrame, gCCAExpansionCompactDestinationWindowFrame);
-            CGFloat candidateArea = CGRectGetWidth(candidateFrame) * CGRectGetHeight(candidateFrame);
-            CGFloat platterArea = CGRectGetWidth(snapshotFrame) * CGRectGetHeight(snapshotFrame);
-            BOOL select = !alreadyCovered && intersects && candidateArea > 0.0 && candidateArea < platterArea * 0.6;
-            if (select && ![liveViews containsObject:candidate]) [liveViews addObject:candidate];
-        }
-        [queue addObjectsFromArray:candidate.subviews];
-    }
-    if (!liveViews.count) {
-        CCADiscardExpandedDismissalSnapshot();
-        return;
-    }
-    NSMutableArray<NSNumber *> *alphas = [NSMutableArray arrayWithCapacity:liveViews.count];
-    NSMutableArray<NSNumber *> *layerOpacities = [NSMutableArray arrayWithCapacity:liveViews.count];
-    for (UIView *liveView in liveViews) {
-        [alphas addObject:@(liveView.alpha)];
-        [layerOpacities addObject:@(liveView.layer.opacity)];
-    }
-    gCCAExpansionHiddenLiveViews = liveViews;
-    gCCAExpansionHiddenLiveAlphas = alphas;
-    gCCAExpansionHiddenLiveLayerOpacities = layerOpacities;
-    [UIView performWithoutAnimation:^{
-        for (UIView *liveView in liveViews) {
-            liveView.alpha = 0.0;
-            liveView.layer.opacity = 0.0;
-        }
-    }];
+    gCCAExpansionExpandedContentAnchorWindow = CGPointMake(CGRectGetMidX(presented.view.frame), CGRectGetMidY(presented.view.frame));
 }
 
 static void CCAInstallExpansionDismissalSnapshot(id clickAssistant) {
     (void)clickAssistant;
     CCADiscardExpansionDismissalSnapshot();
-    UIWindow *window = gCCAExpansionExpandedSnapshot.window ?: gCCAExpansionTransitionWindow;
-    CGRect startFrame = gCCAExpansionExpandedSnapshot.frame;
-    if (!window || CGRectIsEmpty(startFrame) || CGRectIsEmpty(gCCAExpansionCompactDestinationWindowFrame)) return;
-    UIView *proxy = [[UIView alloc] initWithFrame:startFrame];
-    proxy.backgroundColor = UIColor.clearColor;
-    proxy.userInteractionEnabled = NO;
-    proxy.alpha = 0.0;
-    proxy.layer.cornerRadius = gCCAExpansionExpandedSnapshot.layer.cornerRadius;
-    proxy.layer.cornerCurve = kCACornerCurveContinuous;
-    proxy.layer.masksToBounds = YES;
-    UIView *material = gCCAExpansionCompactMaterialTemplate;
-    if (material) {
-        material.frame = proxy.bounds;
-        material.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        material.userInteractionEnabled = NO;
-        [proxy addSubview:material];
-    }
-    if (gCCAExpansionExpandedSnapshot.superview == window) {
-        [window insertSubview:proxy belowSubview:gCCAExpansionExpandedSnapshot];
-    } else {
-        [window addSubview:proxy];
-    }
-    UIImage *foregroundImage = gCCAExpansionCompactForegroundImage ?: gCCAExpansionCompactImage;
-    if (foregroundImage) {
-        UIImageView *foreground = [[UIImageView alloc] initWithImage:foregroundImage];
-        foreground.bounds = (CGRect){CGPointZero, gCCAExpansionCompactDestinationWindowFrame.size};
-        foreground.center = gCCAExpansionExpandedContentAnchorWindow;
-        foreground.contentMode = UIViewContentModeScaleToFill;
-        foreground.userInteractionEnabled = NO;
-        foreground.alpha = 0.0;
-        if (gCCAExpansionExpandedSnapshot.superview == window) {
-            [window insertSubview:foreground belowSubview:gCCAExpansionExpandedSnapshot];
-        } else {
-            [window addSubview:foreground];
-        }
-        gCCAExpansionDismissalForegroundSnapshot = foreground;
-    }
-    gCCAExpansionDismissalSnapshot = proxy;
 }
 
 static UIViewPropertyAnimator *CCAExpansionPropertyAnimator(id clickAssistant) {
@@ -2634,7 +2431,7 @@ static void CCAPrepareOverlayChromeForExpandedDismissal(UIViewController *overla
         [targets addObject:pageIndicators];
     }
     if (!targets.count) return;
-    [UIView animateWithDuration:0.34 delay:0.02
+    [UIView animateWithDuration:0.0 delay:0.02
                         options:UIViewAnimationOptionCurveEaseInOut |
                                 UIViewAnimationOptionBeginFromCurrentState |
                                 UIViewAnimationOptionAllowUserInteraction
@@ -2657,7 +2454,7 @@ static void CCAPrepareOverlayChromeForExpandedDismissal(UIViewController *overla
                     }
                 }];
             }
-            [UIView animateWithDuration:0.12 delay:0.0
+            [UIView animateWithDuration:0.0 delay:0.0
                                 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
                              animations:^{
                 for (UIView *button in quickAccessProxy.subviews) {
@@ -2687,7 +2484,7 @@ static UIView *CCAFindSubviewWithClassName(UIView *root, NSString *className) {
     if (!root || !className.length) return nil;
     NSString *rootName = NSStringFromClass(root.class);
     if ([rootName isEqualToString:className]) return root;
-    // Fast-path: avoid deep recursion for common container classes
+    
     if ([rootName isEqualToString:@"CCUIModuleCollectionView"] ||
         [rootName isEqualToString:@"FCUIActivityListView"]) return nil;
     NSArray<UIView *> *subviews = root.subviews;
@@ -2849,10 +2646,6 @@ static UIImage *CCAConnectivityNativeGlyphImage(UIView *root) {
     return best.image;
 }
 
-// The real glyph shipped inside ConnectivityModule.bundle's asset catalog.
-// Unlike Bluetooth/WiFi (which have animatable CAPackages — Bluetooth.ca /
-// WiFi.ca), AirDrop has no package and is absent from the compact grid, so the
-// live-view proxy below never finds it. The named asset is the reliable source.
 static UIImage *CCAConnectivityBundleGlyphImage(NSString *identifier) {
     NSString *lower = identifier.lowercaseString;
     NSString *assetName = nil;
@@ -2886,8 +2679,7 @@ static UIImage *CCAConnectivityStockProxyGlyphImage(NSString *identifier) {
             }
         }
     }
-    // Fall back to the real asset-catalog glyph (fixes AirDrop, which otherwise
-    // dropped to the generic fallback symbol).
+
     return CCAConnectivityBundleGlyphImage(identifier);
 }
 
@@ -3017,7 +2809,7 @@ static void CCASetConnectivitySelectedSurface(UIViewController *module, BOOL sel
         surface.hidden = !selected;
     };
     if (animated) {
-        [UIView animateWithDuration:0.24 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction animations:changes completion:completion];
+        [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction animations:changes completion:completion];
     } else {
         changes();
         completion(YES);
@@ -3097,11 +2889,11 @@ static UIView *CCAEnsureOwnedCompactPresentation(UIView *host) {
 
 static void CCALayoutOwnedCompactPresentation(UIView *presentation, NSString *symbolName, NSString *titleText, NSString *statusText, CCUILayoutSize gridSize) {
     if (!presentation) return;
-    // Cache key to skip redundant text measurement
+    
     NSString *cacheKey = [NSString stringWithFormat:@"%@|%@|%lu|%lu", titleText ?: @"", statusText ?: @"", (unsigned long)gridSize.width, (unsigned long)gridSize.height];
     NSString *lastKey = objc_getAssociatedObject(presentation, @selector(CCALayoutOwnedCompactPresentation));
     if ([lastKey isEqualToString:cacheKey]) {
-        // Only update text content and visibility without re-measuring
+        
         UILabel *title = (UILabel *)[presentation viewWithTag:1];
         UILabel *status = (UILabel *)[presentation viewWithTag:2];
         title.text = titleText;
@@ -3409,9 +3201,7 @@ static BOOL CCALogicalRectsOverlap(CCUILayoutRect a, CCUILayoutRect b) {
 }
 
 static BOOL CCALogicalRectRespectsColumnBands(CCUILayoutRect rect) {
-    // iOS 18's grid behaves like two visual lanes: columns 1-2 and 3-4. Small
-    // modules may live in either lane, but a two-wide module must not straddle
-    // the gutter between columns 2 and 3. Full-width layouts are exempt.
+
     if (rect.size.width > 2) return rect.origin.x == 0 && rect.size.width <= 4;
     return !(rect.origin.x < 2 && rect.origin.x + rect.size.width > 2);
 }
@@ -3455,13 +3245,6 @@ static NSUInteger CCAPageForRect(CCUILayoutRect rect) {
     return rect.origin.y / kCCAMinimumGridRows;
 }
 
-// Like CCAFindPagedSlot, but guaranteed to return a destination. A module must
-// never be dropped from the layout just because its preferred neighbourhood is
-// full: an unplaced control silently vanishes from every page and leaves its
-// stale rect free to collide with whatever lands on top of it. When no clean
-// slot exists near startPage we widen the search to every page, then fall back
-// to a fresh page. A rare, self-healing extra page is always preferable to a
-// disappeared control (and to the inconsistent layout that can abort a present).
 static BOOL CCAGuaranteedPagedSlot(NSString *identifier, CCUILayoutSize size, NSUInteger startPage, NSDictionary<NSString *, NSValue *> *layout, CCUILayoutPoint *destination) {
     CCUILayoutSize clamped = size;
     if (clamped.width == 0) clamped.width = 1;
@@ -3480,16 +3263,11 @@ static BOOL CCAGuaranteedPagedSlot(NSString *identifier, CCUILayoutSize size, NS
     for (NSUInteger page = highestOccupiedPage + 1; page < kCCAMaxPages; page++) {
         if (CCAFindPagedSlot(identifier, clamped, page, layout, destination)) return YES;
     }
-    // Absolute last resort: the top-left of the final page. Only reachable if
-    // every one of the ~288 cells is occupied, which the page cap makes
-    // impossible in practice; kept so the function is total by construction.
+
     if (destination) *destination = (CCUILayoutPoint){0, (kCCAMaxPages - 1) * kCCAMinimumGridRows};
     return YES;
 }
 
-// A page owned by a single module gets a themed scrubber indicator (music
-// note for now playing, cellular glyph for connectivity). Returns nil when
-// the page holds anything else so the caller falls back to the plain dot.
 static NSString *CCAThemedPageIndicatorSymbolForPage(NSUInteger page) {
     UIViewController *overlay = gOverlayControllers.allObjects.firstObject;
     if (!overlay) return nil;
@@ -3628,7 +3406,6 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     return nil;
 }
 @end
-
 
 @interface CCAsterCoordinator : NSObject <UIGestureRecognizerDelegate>
 + (instancetype)shared;
@@ -3796,13 +3573,12 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         if (!shouldHide) CCASetQuickAccessMaterialsHidden(host, NO);
     };
     void (^completion)(BOOL) = ^(__unused BOOL finished) {
-        // Expansion and presentation-state callbacks can overlap. Never let an
-        // obsolete hide completion make the newly revealed chrome disappear.
+
         if (objc_getAssociatedObject(host, kCCAQuickAccessAnimationTokenKey) != token) return;
         host.hidden = shouldHide;
     };
     if (animated) {
-        [UIView animateWithDuration:0.28 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:changes completion:completion];
+        [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:changes completion:completion];
     } else {
         changes();
         completion(YES);
@@ -3841,10 +3617,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         remove.alpha = 0.0;
         resize.hidden = YES;
         resize.alpha = 0.0;
-        // Hide the resized-presentation overlay only for the module actually
-        // expanding: identifier match, or (for identifier-less expansions) the
-        // module whose container is flagged expanded. Hiding all of them left
-        // every resizable module label-less afterwards.
+
         BOOL moduleIsExpanding = [CCAModuleIdentifier(module) isEqualToString:gCCAExpandedModuleIdentifier];
         if (!moduleIsExpanding && !gCCAExpandedModuleIdentifier.length) {
             @try {
@@ -3918,12 +3691,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         UIView *container = presentationWrapper.superview;
         CGRect frame = CGRectZero;
         if (container && [NSStringFromClass(container.class) containsString:@"ContentModuleContainerView"] && container.superview) {
-            // Native presentation drives each container from a translated and
-            // scaled closed state. Deriving the grid origin from convertRect:
-            // therefore changed the duplicate layout base during the opening
-            // animation. Recover the container's untransformed model rect from
-            // its position/bounds so the base is the final grid origin from the
-            // first frame onward.
+
             CGSize size = container.bounds.size;
             CGPoint anchor = container.layer.anchorPoint;
             CGPoint position = container.layer.position;
@@ -4142,10 +3910,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         existingHost.userInteractionEnabled = gQuickAccessButtonsEnabled;
         return;
     }
-    // Keep this strictly inside the overlay. The system status-bar superview is
-    // owned above Control Center and survives dismissal, which leaks buttons
-    // onto the Home Screen. Header pocket is overlay-scoped and still carries
-    // the native top-chrome presentation transform.
+
     UIView *animationHost = CCAFindSubviewWithClassName(controller.view, @"CCUIHeaderPocketView");
     if (!animationHost) {
         @try {
@@ -4192,9 +3957,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         [host addSubview:power];
         [NSLayoutConstraint activateConstraints:@[[power.trailingAnchor constraintEqualToAnchor:host.trailingAnchor constant:-22.0], [power.topAnchor constraintEqualToAnchor:host.topAnchor constant:(CCAIsHomeButtonDevice() ? 28.0 : -48.0)], [power.widthAnchor constraintEqualToConstant:40.0], [power.heightAnchor constraintEqualToConstant:40.0]]];
     }
-    // The provider-driven collection rebuild replaces the header pocket, so
-    // this host can be re-created mid-session. When Control Center is already
-    // presented, reveal immediately instead of waiting for the state callback.
+
     BOOL revealed = gCCAControlCenterPresented && gQuickAccessButtonsEnabled;
     host.alpha = revealed ? 1.0 : 0.0;
     host.hidden = !revealed;
@@ -4220,13 +3983,6 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     BOOL changed = NO;
     NSUInteger highestPage = 0;
 
-    // Drop saved origins/sizes for controls that are no longer part of the
-    // layout. These process-wide dictionaries outlive provider rebuilds, so a
-    // removed or disabled module otherwise leaves a stale rect behind that can
-    // inflate the page count or, when the identifier reappears, resurrect an
-    // overlap. Only prune identifiers that are neither currently collected nor
-    // still enabled, and only once a plausible full module set is present, so a
-    // transient partial rebuild can never clear live positions.
     if (moduleByIdentifier.count >= 2) {
         NSArray<NSString *> *enabledForPrune = [self enabledModuleIdentifiers];
         for (NSString *staleID in gCCACustomOrigins.allKeys) {
@@ -4250,9 +4006,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         if ((!desired.size.width || !desired.size.height) && baseValue) [baseValue getValue:&desired.size];
         NSArray<NSNumber *> *savedSize = gCCACustomSizes[identifier];
         if (savedSize.count >= 2) desired.size = (CCUILayoutSize){savedSize[0].unsignedIntegerValue, savedSize[1].unsignedIntegerValue};
-        // Clamp rather than skip. A missing or out-of-range logical size used to
-        // drop the control from the layout entirely (it vanished); a control
-        // that is present on screen must always be given a placeable footprint.
+
         if (!desired.size.width) desired.size.width = 1;
         if (!desired.size.height) desired.size.height = 1;
         if (desired.size.width > 4) desired.size.width = 4;
@@ -4268,9 +4022,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             NSUInteger startPage = desired.origin.y / kCCAMinimumGridRows;
             if (crossesBoundary) startPage++;
             CCUILayoutPoint destination = {};
-            // Guaranteed to succeed: reflow the control to the nearest free slot
-            // instead of leaving it unplaced (and therefore invisible) when its
-            // saved neighbourhood is full.
+
             CCAGuaranteedPagedSlot(identifier, desired.size, startPage, placed, &destination);
             desired.origin = destination;
         }
@@ -4301,12 +4053,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
 }
 
 - (void)setEditControlsSuppressedForPaging:(BOOL)suppressed overlay:(UIViewController *)overlay animated:(BOOL)animated {
-    // Remove/resize chrome used to float on overlay.view, so paging had to
-    // suppress it while pages slid underneath.  The chrome now lives with the
-    // module wrapper (like the border), so hiding it during paging just creates
-    // the old disappear/reappear flash. Keep the method as a compatibility
-    // synchronization point for existing callers, but do not enter the global
-    // suppression state.
+
     gCCAEditChromeSuppressedForPaging = NO;
     if (!overlay || !gEditModeActive) return;
     for (UIViewController *module in CCACollectModuleControllers(overlay)) {
@@ -4329,11 +4076,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         NSArray<NSNumber *> *origin = gCCACustomOrigins[identifier];
         if (origin.count >= 2) rect.origin = (CCUILayoutPoint){origin[0].unsignedIntegerValue, origin[1].unsignedIntegerValue};
         BOOL pageVisible = showAdjacent || CCAPageForRect(rect) == gCCACurrentPage;
-        // Keep UIView visibility and layout entirely under Control Center's
-        // ownership. Mutating alpha plus setNeedsLayout here fed back through
-        // the private module layout hooks while edit chrome's display link was
-        // active, eventually watchdog-stalling SpringBoard. Layer opacity is a
-        // compositor-only page clip and does not invalidate module layout.
+
         BOOL activeDragSource = CCAIsActiveDragModuleIdentifier(identifier);
         BOOL pageHidden = (!pageVisible && !(gCCADragInProgress && module.view == gCCAActiveDragModuleView)) || activeDragSource;
         objc_setAssociatedObject(module.view, kCCAPageHiddenKey, @(pageHidden), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -4553,10 +4296,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     }
     if (gCCAUseNativeOpeningCompensation &&
         (gCCAControlCenterPresentationState == 1 || gCCAControlCenterPresentationState == 2)) {
-        // The native scroll presentation bounds and our inverse sublayer
-        // offset must reach the render server in the same frame. Letting the
-        // latter wait for the run-loop's normal commit leaves a one-frame
-        // mismatch precisely when CCUI drops its opening bounds animation.
+
         [CATransaction flush];
     }
 
@@ -4602,7 +4342,6 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             remove.hidden = YES;
             resize.hidden = YES;
         }
-        [border.layer removeAnimationForKey:@"CCAsterBreathing"];
 
         float targetOpacity = selected ? 1.0f : 0.0f;
         if (animated) {
@@ -4647,9 +4386,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
                 if (origin.count >= 2) rect.origin = (CCUILayoutPoint){origin[0].unsignedIntegerValue, origin[1].unsignedIntegerValue};
                 if (CCAPageForRect(rect) == gCCACurrentPage) [self applyEditingToModule:module editing:YES];
             }
-            // applyEditingToModule owns creation/configuration and therefore
-            // briefly restores alpha. Re-apply the page clip before revealing
-            // only the destination page's overlay controls.
+
             [self updatePagedModuleVisibilityForOverlay:overlay showAdjacent:NO];
             [self updateEditControlFramesForOverlay:overlay];
             [self setEditControlsSuppressedForPaging:NO overlay:overlay animated:YES];
@@ -4688,23 +4425,12 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     CATransform3D sublayerBase = [objc_getAssociatedObject(collection.view, kCCAOriginalSublayerTransformKey) CATransform3DValue];
     CGFloat editOffset = gEditModeActive ? 0.0 : kCCARestingModuleOffset;
     CGFloat pageOffset = -(CGFloat)gCCACurrentPage * CCAVisualPageSpan() + gCCAPagerInteractiveTranslation;
-    // While a module is expanded, CCUI's expand/collapse animation reads the
-    // module's frame in window coordinates. UIView coordinate conversion honors
-    // view.transform but NOT layer.sublayerTransform, so if the page offset
-    // lives on the sublayer the module reports its untranslated model row (a
-    // full page below the screen) and the platter flies to/from off the bottom.
-    // Carry the page offset on the view transform (and neutralise the sublayer)
-    // for the duration of the expansion so the source frame is correct. This
-    // matches CCAApplyExpansionPageGeometrySync and stops overriding it.
+
     BOOL flattenForExpansion = gCCAExpandedModuleOpen && !gEditModeActive && !gCCAPagerScrubbingActive;
     CGFloat viewTransformOffset = editOffset + (flattenForExpansion ? pageOffset : 0.0);
     CATransform3D targetSublayerTransform = flattenForExpansion ? sublayerBase : CATransform3DTranslate(sublayerBase, 0.0, pageOffset, 0.0);
     void (^changes)(void) = ^{
-        // Keep page motion on one compositor property in both presentation
-        // modes. Moving it between UIView.transform at rest and
-        // sublayerTransform while editing allowed CCUI's edit-exit layout to
-        // preserve one side of the handoff and either lose or double the page
-        // offset. The view transform now owns only the small chrome spacing.
+
         collection.view.layer.transform = CATransform3DIdentity;
         if (gCCAPagerScrubbingActive) {
             CGPoint overlayCenter = CGPointMake(CGRectGetMidX(overlay.view.bounds), CGRectGetMidY(overlay.view.bounds));
@@ -4930,7 +4656,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     gCCAPagerScrubbingActive = YES;
     gCCAPagerHeldScale = 1.0;
     gCCAPagerHeldAlphaFactor = 1.0;
-    gCCAPagerViscousProgress = (CGFloat)gCCAPagerInteractiveStartPage;
+    gCCAPagerViscousProgress = progress;
     gCCAPagerPreviousRawProgress = (CGFloat)gCCAPagerInteractiveStartPage;
     gCCAPagerFilteredVelocity = 0.0;
     gCCAPagerJelloScaleX = 1.0;
@@ -4946,9 +4672,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     }
     [self updateTopFadeForOverlay:overlay presentationAlpha:1.0];
     [self setHeaderChromeHiddenForScrubbing:YES overlay:overlay animated:YES];
-    // Scrubbing is a discrete page picker, not a scrolling stack. Keep only
-    // the selected page composited; crossing an indicator swaps that page in
-    // place through the pop animation below.
+
     [self updatePagedModuleVisibilityForOverlay:overlay showAdjacent:NO];
 
     UIViewController *collection = [self moduleCollectionControllerInOverlay:overlay];
@@ -4983,10 +4707,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     CCAClampNativeScrollViewForOverlay(overlay);
     CGFloat maxProgress = (CGFloat)gCCAPageCount - 1.0;
     CGFloat clamped = MIN(maxProgress, MAX(0.0, progress));
-    // Selection is bounded, while physics is allowed to continue past either
-    // endpoint through a logarithmic resistance curve. This keeps viscosity
-    // and jello alive above the first icon and below the last without letting
-    // an extreme pull accumulate an enormous delayed catch-up distance.
+
     CGFloat physicsProgress = progress;
     if (progress < 0.0) physicsProgress = -log1p(-progress);
     else if (progress > maxProgress) physicsProgress = maxProgress + log1p(progress - maxProgress);
@@ -4999,10 +4720,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     rawVelocity = MIN(8.0, MAX(-8.0, rawVelocity));
     CGFloat velocityResponse = 1.0 - exp(-dt * kCCAPagerJelloVelocityResponse);
     gCCAPagerFilteredVelocity += (rawVelocity - gCCAPagerFilteredVelocity) * velocityResponse;
-    // Keep the icons under the finger, but let the visible page trail the raw
-    // scrub position by a few frames. Filtering the full progress (rather than
-    // only its within-page offset) carries the glue feeling cleanly across a
-    // page threshold as well.
+
     CGFloat dragResponse = 1.0 - exp(-dt * kCCAPagerViscosityResponse);
     gCCAPagerViscousProgress += (physicsProgress - gCCAPagerViscousProgress) * dragResponse;
     CGFloat visualProgress = gCCAPagerViscousProgress;
@@ -5014,9 +4732,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     gCCAPagerLastSampleTime = now;
     gCCAPagerInteractiveProgress = clamped;
     gCCACurrentPage = candidate;
-    // Keep the selected page centered. A small opposing parallax (at most
-    // roughly half a module gap) preserves the feeling that the finger is
-    // still pulling without exposing an adjacent page.
+
     CGFloat overlayHeight = CGRectGetHeight(overlay.view.bounds);
     CGFloat scrubHostHeight = kCCAPageIndicatorScrubStep * gCCAPageCount;
     CGFloat scrubHostMinY = floor((overlayHeight - scrubHostHeight) * 0.5);
@@ -5043,24 +4759,21 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     if (endpointPull) {
         gCCAPagerInteractiveTranslation += (translationTarget - gCCAPagerInteractiveTranslation) * dragResponse;
     } else {
-        gCCAPagerInteractiveTranslation = translationTarget;
+        gCCAPagerInteractiveTranslation = 0.0;
     }
-    // Ease the whole page inward around the collection's center as the scrub
-    // handoff begins. Reapplying this after the page translation keeps the
-    // interactive paging coordinate system unchanged while giving the held
-    // page the compact, suspended iOS 18 presentation.
+
     CGFloat entrance = gCCAPagerInteractiveBeganTime > 0.0 ?
         MIN(1.0, MAX(0.0, (CACurrentMediaTime() - gCCAPagerInteractiveBeganTime) / 0.26)) : 1.0;
     entrance = entrance * entrance * entrance * (entrance * (entrance * 6.0 - 15.0) + 10.0);
     CGFloat heldScale = 1.0 - 0.30 * entrance;
-    gCCAPagerHeldScale = heldScale;
-    gCCAPagerHeldAlphaFactor = 1.0 - 0.30 * entrance;
+    gCCAPagerHeldScale = 1.0;
+    gCCAPagerHeldAlphaFactor = 1.0;
     CGFloat jelloInput = gCCAPagerFilteredVelocity * kCCAPagerJelloVelocityToScale +
                          pageTension * kCCAPagerJelloTensionToScale;
     CGFloat jello = MIN(kCCAPagerMaximumJelloScale,
                         MAX(-kCCAPagerMaximumJelloScale, jelloInput)) * entrance;
-    gCCAPagerJelloScaleX = 1.0 - jello * 0.42;
-    gCCAPagerJelloScaleY = 1.0 + jello;
+    gCCAPagerJelloScaleX = 1.0;
+    gCCAPagerJelloScaleY = 1.0;
     [self applyPageTransformToOverlay:overlay animated:NO];
     if (changedPage) [self updatePagedModuleVisibilityForOverlay:overlay showAdjacent:NO];
 
@@ -5091,11 +4804,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     }
 
     if (changedPage) {
-        // Pop the newly selected page in place. Animating module presentation
-        // layers avoids changing private CCUI layout or leaving a second page
-        // onscreen. Persistent Gaussian filters on oversized wrapper layers
-        // caused the black rectangular intermediate surface, so this path is
-        // deliberately bounded to transform + opacity.
+
         CCAEditGridView *grid = gEditModeActive ? [self editGridForPage:candidate overlay:overlay] : nil;
         if (grid) {
             [grid.layer removeAnimationForKey:@"CCAsterPagerPopScale"];
@@ -5169,7 +4878,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     }];
     };
     if (gEditModeActive) {
-        [UIView animateWithDuration:0.08 delay:0.0 options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction animations:layoutPager completion:nil];
+        [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction animations:layoutPager completion:nil];
     } else {
         layoutPager();
     }
@@ -5231,7 +4940,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         objc_setAssociatedObject(collection.view, kCCAScrubCollectionBoundsKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(collection.view, kCCAScrubCollectionPositionKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         CCAReassertNativeScrollClampForOverlay(overlay);
-        gCCAPagerViscousProgress = (CGFloat)target;
+        gCCAPagerViscousProgress = progress;
         gCCAPagerFilteredVelocity = 0.0;
         gCCAPagerLastSampleTime = 0.0;
         UIView *host = [overlay.view viewWithTag:kCCAPageIndicatorHostTag];
@@ -5282,11 +4991,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     if (!gPagingEnabled || !gesture || gCCAExpandedModuleOpen || gCCADragInProgress) return;
     if (controller) gCCAPresentationController = controller;
     if (overlay) {
-        // The pull gesture can begin before viewDidAppear/viewDidLayoutSubviews
-        // has installed CCAster's pager.  Previously the tracker returned here,
-        // so manually touching the pager was effectively required to prime the
-        // next presentation. Bootstrap the persistent overlay on the first
-        // pull callback instead.
+
         if (![gOverlayControllers containsObject:overlay]) {
 
             [self installOnOverlay:overlay];
@@ -5305,9 +5010,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     BOOL live = gesture.numberOfTouches > 0 &&
         (gesture.state == UIGestureRecognizerStateBegan || gesture.state == UIGestureRecognizerStateChanged);
     if (!live) {
-        // The system recognizer can transition from its last Changed event to
-        // Ended between display frames. Finish synchronously so a quick pull
-        // cannot strand or skip the pager handoff.
+
         if (gCCAPresentationPanGesture == gesture) [self presentationPanDisplayLinkFired:nil];
         return;
     }
@@ -5322,9 +5025,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         gCCAPresentationPanDisplayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(presentationPanDisplayLinkFired:)];
         [gCCAPresentationPanDisplayLink addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
     }
-    // Sample every private pull callback in addition to the display link.
-    // This makes the vertical crossing deterministic even when a fast gesture
-    // enters the pager band and releases inside a single refresh interval.
+
     [self presentationPanDisplayLinkFired:nil];
 }
 
@@ -5392,17 +5093,12 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         [self updatePageIndicatorsForOverlay:overlay];
         host = [overlay.view viewWithTag:kCCAPageIndicatorHostTag];
     }
-    // SBPanSystemGestureRecognizer can remain in Changed while SpringBoard
-    // performs its post-release presentation animation. Touch count, unlike
-    // state, drops to zero immediately and is the reliable handoff boundary.
+
     BOOL live = pan && pan.numberOfTouches > 0 &&
         (pan.state == UIGestureRecognizerStateBegan || pan.state == UIGestureRecognizerStateChanged);
     if (!overlay || !host || !live) {
         if (gCCAPresentationNativeSettlePending) {
-            // A very fast pull can release during the single run-loop turn in
-            // which the native reveal is being committed. Preserve that fact
-            // so the deferred handoff can begin and settle to the sampled page
-            // instead of discarding the crossing or exposing a half-open CC.
+
             gCCAPresentationReleasedWhileSettling = YES;
             return;
         }
@@ -5465,17 +5161,11 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
 
     UIView *windowView = overlay.view.window ?: overlay.view;
     CGPoint windowLocation = [pan locationInView:windowView];
-    // The iOS 16 delegate only reports "significant" presentation progress
-    // at the settled boundary on this hardware. Crossing the pager's vertical
-    // origin is therefore the handoff boundary regardless of horizontal touch
-    // position; the gesture is already the dedicated top-right CC recognizer.
+
     CGFloat scrubHostHeight = kCCAPageIndicatorScrubStep * gCCAPageCount;
     CGFloat scrubHostMinY = floor((CGRectGetHeight(windowView.bounds) - scrubHostHeight) * 0.5);
     CGFloat scrubTouchY = windowLocation.y - scrubHostMinY;
-    // Opening starts on page zero. Do not transfer ownership merely because
-    // the finger entered the pager's enlarged hit region: wait until it
-    // actually reaches the visible first page icon. Once claimed, the normal
-    // expanded scrub geometry below remains in effect.
+
     CGFloat handoffY = scrubHostMinY + kCCAPageIndicatorScrubStep * 0.5;
     if (host.subviews.count) {
         UIView *firstIndicator = host.subviews.firstObject;
@@ -5492,12 +5182,6 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     BOOL shouldStartHandoff = windowLocation.y >= handoffY;
     if (!gCCAPresentationPageHandoffActive && !gCCAPresentationNativeSettlePending && shouldStartHandoff) {
 
-        // SpringBoard's pull recognizer leaves the modular overlay in an
-        // interactive stretched presentation. Starting our compact pager in
-        // that state makes its scale compose with a moving native transform,
-        // which produces the jump/halfway state seen at the handoff. Claim the
-        // gesture now, then finish the native reveal on the next main-loop turn
-        // before applying any CCAster pager transforms.
         gCCAPresentationNativeSettlePending = YES;
         gCCAPresentationReleasedWhileSettling = NO;
         __weak UIViewController *weakOverlay = overlay;
@@ -5593,7 +5277,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     BOOL countChanged = previousCount != gCCAPageCount;
     if (host.subviews.count > gCCAPageCount) {
         NSArray<UIView *> *extra = [host.subviews subarrayWithRange:NSMakeRange(gCCAPageCount, host.subviews.count - gCCAPageCount)];
-        [UIView animateWithDuration:0.18 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
+        [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
             for (UIView *view in extra) {
                 view.alpha = 0.0;
                 view.transform = CGAffineTransformMakeScale(0.72, 0.72);
@@ -5619,8 +5303,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     CGFloat hostHeight = itemHeight * gCCAPageCount;
     CGFloat hostWidth = gCCAPagerScrubbingActive ? kCCAPageIndicatorScrubHostWidth : kCCAPageIndicatorRestHostWidth;
     CGFloat rightInset = gCCAPagerScrubbingActive ? kCCAPageIndicatorScrubRightInset : kCCAPageIndicatorRestRightInset;
-    // Rest in the native-looking edge gutter, then slide inward only while
-    // scrubbing so the enlarged symbol remains visible under the finger.
+
     CGRect targetHostFrame = CGRectMake(CGRectGetWidth(overlay.view.bounds) - hostWidth - rightInset,
                                         floor((CGRectGetHeight(overlay.view.bounds) - hostHeight) * 0.5),
                                         hostWidth,
@@ -5639,16 +5322,16 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         }];
     };
     if (countChanged && host.window) {
-        [UIView animateWithDuration:0.24 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction animations:layoutIndicators completion:nil];
+        [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction animations:layoutIndicators completion:nil];
     } else {
-        [UIView animateWithDuration:0.22 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction animations:layoutIndicators completion:nil];
+        [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction animations:layoutIndicators completion:nil];
     }
     BOOL revealActive = CCAExpandedChromeRevealActive();
     host.hidden = gCCAPageCount <= 1 || !gCCAControlCenterPresented || (gCCAExpandedModuleOpen && !revealActive);
     if (!host.hidden) {
         [overlay.view bringSubviewToFront:host];
         if (!revealActive) {
-            [UIView animateWithDuration:0.20 delay:0.0
+            [UIView animateWithDuration:0.0 delay:0.0
                                 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
                              animations:^{ host.alpha = 1.0; }
                              completion:nil];
@@ -5699,7 +5382,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     if ((startPage == 0 && translation.y > 0.0) || (startPage + 1 >= gCCAPageCount && translation.y < 0.0)) translation.y *= 0.24;
     if (gesture.state == UIGestureRecognizerStateChanged) {
         gCCACurrentPage = startPage;
-        gCCAPagerInteractiveTranslation = translation.y;
+        gCCAPagerInteractiveTranslation = 0.0;
         [self applyPageTransformToOverlay:overlay animated:NO];
         [self updateTopFadeForOverlay:overlay presentationAlpha:1.0];
         if (gEditModeActive) [self updateEditControlFramesForOverlay:overlay];
@@ -5755,12 +5438,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             }];
         } else {
             for (UIGestureRecognizer *suppressed in suppressedGestures) suppressed.enabled = YES;
-            // Velocity-aware settle (mirrors the edit-mode branch above). The old
-            // path used a fixed-duration curve via setCurrentPage:, so a fast
-            // flick to the last page crawled the final stretch into place — the
-            // "jelly overstick". Hold the page and ride the interactive
-            // translation to the target on a spring scaled by release velocity,
-            // then rebase in the completion.
+
             gCCAPagerTransitionActive = YES;
             gCCAPagerScrubbingActive = NO;
             [self updatePagedModuleVisibilityForOverlay:overlay showAdjacent:YES];
@@ -5793,10 +5471,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
                 }
             }];
         }
-        // The private scroll view can receive a final deferred offset write
-        // after its pan is re-enabled. Reassert both native and CCAster settled
-        // geometry across the short snap window so no page remains one span
-        // above or below its selected indicator.
+
         if (!gEditModeActive) {
             for (NSNumber *delay in @[@0.0, @0.08, @0.24, @0.42]) {
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay.doubleValue * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -5889,8 +5564,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         objc_setAssociatedObject(blankHold, @selector(blankHeld:), @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         [controller.view addGestureRecognizer:blankHold];
     }
-    // Tapping blank space (outside modules / vacant grid cells) exits edit
-    // mode; the delegate's tap branch rejects touches on modules and chrome.
+
     UITapGestureRecognizer *editExitTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(editExitTapped:)];
     editExitTap.cancelsTouchesInView = NO;
     editExitTap.delegate = self;
@@ -5936,9 +5610,6 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     collection.view.layer.sublayerTransform = CATransform3DTranslate(sublayerBase, 0.0, -(CGFloat)gCCACurrentPage * CCAVisualPageSpan(), 0.0);
     collection.view.transform = CGAffineTransformTranslate(collectionBase, 0.0, kCCARestingModuleOffset);
 
-    // Keep module wrappers at their native transforms. Expansion transitions
-    // temporarily own these wrappers; a persistent per-wrapper translation was
-    // reapplied after dismissal and produced the visible upward landing hop.
     NSMutableSet<NSValue *> *seenWrappers = [NSMutableSet set];
     for (UIViewController *module in CCACollectModuleControllers(overlay)) {
         UIView *wrapper = module.view.superview;
@@ -5966,9 +5637,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         CGPoint velocity = [(UIPanGestureRecognizer *)gesture velocityInView:gesture.view];
         CGPoint location = [gesture locationInView:gesture.view];
         if (location.y > CGRectGetHeight(gesture.view.bounds) - MAX(92.0, gesture.view.safeAreaInsets.bottom + 68.0)) return NO;
-        // At the bottom of the pager, preserve iOS 16's native upward Control
-        // Center dismissal instead of trapping the user in a rubber band — but
-        // never while a drag is in flight, or the held module dumps out of edit.
+
         if (!gCCADragInProgress && gCCACurrentPage + 1 >= gCCAPageCount && velocity.y < 0.0) return NO;
         return fabs(velocity.y) > fabs(velocity.x) * 1.12;
     }
@@ -6027,11 +5696,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         while (responder && ![responder isKindOfClass:[UIViewController class]]) responder = responder.nextResponder;
         if ([responder isKindOfClass:[UIViewController class]]) overlay = (UIViewController *)responder;
         CGPoint point = [touch locationInView:overlay.view];
-        // Geometric chrome guard: the tag walk above depends on hit-testing
-        // having routed the touch to the button. If any other view claimed it,
-        // a touch inside a remove/resize footprint must still never start a
-        // drag; it would cancel the button's tap and shrink the module.
-        // Non-generous zones keep 1x1 modules grabbable next to their handle.
+
         if ([self pointHitsEditChrome:point overlay:overlay generous:NO]) return NO;
         for (UIViewController *module in CCACollectModuleControllers(overlay)) {
             if (module.view.hidden || module.view.alpha <= 0.01 || CCAModuleViewIsPageHidden(module.view)) continue;
@@ -6059,9 +5724,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             CGPoint location = [touch locationInView:overlay.view];
             UIButton *addControl = (UIButton *)[overlay.view viewWithTag:kCCAAddControlButtonTag];
             if (addControl && !addControl.hidden && CGRectContainsPoint(CGRectInset(addControl.frame, -12.0, -12.0), location)) return NO;
-            // A near-miss on the remove bubble or resize grabber must reach
-            // the control (or do nothing) — never read as a blank-space tap
-            // that exits edit mode.
+
             if ([self pointHitsEditChrome:location overlay:overlay generous:YES]) return NO;
             for (UIViewController *module in CCACollectModuleControllers(overlay)) {
                 if (module.view.hidden || module.view.alpha <= 0.01 || CCAModuleViewIsPageHidden(module.view)) continue;
@@ -6235,8 +5898,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     if (gesture.state == UIGestureRecognizerStateBegan) {
         CCAHaptic();
         gCCAEditExitConsumedUntil = CACurrentMediaTime() + 0.9;
-        // The native home gesture races this pan and drives presentation
-        // callbacks that clobber an animated exit; leave editing atomically.
+
         [self dismissEditingImmediately];
         gesture.enabled = NO;
         gesture.enabled = YES;
@@ -6248,7 +5910,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     UIView *material = [button viewWithTag:kCCAPowerMaterialTag];
     if (gesture.state == UIGestureRecognizerStateBegan) {
         CCAHaptic();
-        [UIView animateWithDuration:0.55 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
+        [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
             material.alpha = 1.0;
             button.transform = CGAffineTransformMakeScale(1.07, 1.07);
         } completion:^(__unused BOOL finished) {
@@ -6265,7 +5927,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             }
         }];
     } else if (gesture.state == UIGestureRecognizerStateEnded || gesture.state == UIGestureRecognizerStateCancelled || gesture.state == UIGestureRecognizerStateFailed) {
-        [UIView animateWithDuration:0.2 delay:0.0 options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
+        [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
             material.alpha = 1.0;
             button.transform = CGAffineTransformIdentity;
         } completion:nil];
@@ -6326,10 +5988,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     gCCASheetScreenImage = nil;
     gCCASheetModuleFrames = nil;
     if (!overlay.view.window) return;
-    // Materials (platters, slider fills, tints) only exist composited in the
-    // framebuffer — live snapshot views lose them across windows and
-    // drawViewHierarchyInRect never renders them. Grab the real screen with
-    // CCAster's edit chrome hidden for one committed frame, then crop modules.
+
     NSMutableArray<UIView *> *hiddenViews = [NSMutableArray array];
     NSMutableArray<NSDictionary *> *detachedBorders = [NSMutableArray array];
     void (^hideView)(UIView *) = ^(UIView *view) {
@@ -6358,9 +6017,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
                 @"parent": borderParent,
                 @"index": @(borderIndex == NSNotFound ? borderParent.subviews.count : borderIndex),
             }];
-            // The breathing ring has an active presentation layer. Merely
-            // hiding its model view can leave one composited frame in the
-            // framebuffer crop, so detach it for the gallery snapshot.
+
             [border removeFromSuperview];
         }
         NSString *identifier = CCAModuleIdentifier(module);
@@ -6467,9 +6124,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             if ([value isKindOfClass:[NSString class]] && [value length]) names[identifier] = value;
         } @catch (__unused NSException *exception) {}
     }
-    // The live repository object only reliably exposes instantiated modules.
-    // The authoritative catalog is the module bundles on disk, exactly what
-    // Settings > Control Center offers.
+
     NSArray<NSString *> *bundleDirectories = @[
         @"/System/Library/ControlCenter/Bundles",
         @"/Library/ControlCenter/Bundles",
@@ -6485,23 +6140,19 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             [identifiers addObject:identifier];
             if (!bundleURLs[identifier]) bundleURLs[identifier] = bundle.bundleURL;
             if (!names[identifier]) {
-                // CFBundleName is the executable name ("OrientationLockModule")
-                // and reads as junk; only the display name is trustworthy.
+
                 id displayName = bundle.localizedInfoDictionary[@"CFBundleDisplayName"] ?: bundle.infoDictionary[@"CFBundleDisplayName"];
                 if ([displayName isKindOfClass:[NSString class]] && [displayName length]) names[identifier] = displayName;
             }
         }
     }
-    // The repository can omit fixed system modules; make sure everything that
-    // is visibly part of Control Center still appears (dimmed) in the sheet.
+
     for (NSString *identifier in [self fixedModuleIdentifiers]) if (!CCAIdentifierIsLegacyPhysicalDuplicate(identifier)) [identifiers addObject:identifier];
     for (NSString *identifier in enabled) if (!CCAIdentifierIsLegacyPhysicalDuplicate(identifier)) [identifiers addObject:identifier];
 
     NSMutableArray<NSDictionary *> *catalog = [NSMutableArray array];
     for (NSString *identifier in identifiers) {
-        // Call-managed conference modules appear and disappear with the call;
-        // real iOS never offers them in the gallery either. ContinuousExpose
-        // (iPad Stage Manager) and PerformanceTrace (internal) are noise here.
+
         if ([identifier localizedCaseInsensitiveContainsString:@"conference"] ||
             [identifier localizedCaseInsensitiveContainsString:@"continuousexpose"] ||
             [identifier localizedCaseInsensitiveContainsString:@"performancetrace"] ||
@@ -6517,7 +6168,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             }
         }
         if (!name.length) name = CCAPrettyNameForIdentifier(identifier);
-        // Unlocalized executable names still slip through repository metadata.
+        
         if ([name hasSuffix:@"Module"] && ![name containsString:@" "]) name = CCAPrettyNameForIdentifier(identifier);
         NSString *bundlePath = bundleURLs[identifier].path ?: @"";
         BOOL isTweak = bundlePath.length && ![bundlePath hasPrefix:@"/System/"];
@@ -6534,8 +6185,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             @"bundleURL": bundleURLs[identifier] ?: (id)NSNull.null,
         }];
     }
-    // Stable alphabetical order — a module's position never changes based on
-    // whether it is currently added.
+
     [catalog sortUsingComparator:^NSComparisonResult(NSDictionary *left, NSDictionary *right) {
         return [left[@"name"] localizedCaseInsensitiveCompare:right[@"name"]];
     }];
@@ -6629,17 +6279,12 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     }
 }
 
-// Shared chrome hit test: YES when the point lands inside a visible
-// remove/resize control. `generous` pads the zones (used to keep taps from
-// slipping past chrome and exiting edit mode); non-generous shrinks the
-// resize zone on 1x1 modules so their tiny surface stays grabbable.
 - (BOOL)pointHitsEditChrome:(CGPoint)point overlay:(UIViewController *)overlay generous:(BOOL)generous {
     for (UIViewController *module in CCACollectModuleControllers(overlay)) {
         if (module.view.hidden || module.view.alpha <= 0.01 || CCAModuleViewIsPageHidden(module.view)) continue;
         UIButton *removeChrome = objc_getAssociatedObject(module.view, kCCARemoveButtonKey);
         UIButton *resizeChrome = objc_getAssociatedObject(module.view, kCCAResizeButtonKey);
-        // Resize grabber: a tight bottom-right corner that always keeps priority
-        // over a drag (matches CCAExpandedHitButton's own corner acceptance).
+
         if (resizeChrome && !resizeChrome.hidden && resizeChrome.alpha > 0.01 && resizeChrome.userInteractionEnabled && resizeChrome.superview) {
             BOOL small = [objc_getAssociatedObject(resizeChrome, kCCASmallModuleChromeKey) boolValue];
             CGRect frame = [resizeChrome.superview convertRect:resizeChrome.frame toView:overlay.view];
@@ -6647,11 +6292,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             CGRect hitFrame = CGRectMake(CGRectGetMaxX(frame) - cornerSize, CGRectGetMaxY(frame) - cornerSize, cornerSize, cornerSize);
             if (CGRectContainsPoint(hitFrame, point)) return YES;
         }
-        // Remove bubble: a purely visual affordance now. It only participates in
-        // the generous pass, whose sole job is to stop a near-corner tap from
-        // reading as a blank-space tap that exits edit mode. In the non-generous
-        // (drag) pass it never blocks, so the top-left stays grabbable and
-        // removal is decided heuristically on drop.
+
         if (generous && removeChrome && !removeChrome.hidden && removeChrome.alpha > 0.01 && removeChrome.superview) {
             CGRect frame = [removeChrome.superview convertRect:removeChrome.frame toView:overlay.view];
             if (CGRectContainsPoint(CGRectInset(frame, -10.0, -10.0), point)) return YES;
@@ -6674,8 +6315,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
 - (UIView *)previewViewForCatalogEntry:(NSDictionary *)entry {
     NSString *identifier = entry[@"identifier"];
     CCUILayoutSize layoutSize = [self catalogLayoutSizeForIdentifier:identifier];
-    // Third-party (CCSupport-style) modules often declare their size in the
-    // bundle's Info.plist rather than through the live provider.
+
     id bundleProbe = entry[@"bundleURL"];
     if (layoutSize.width == 1 && layoutSize.height == 1 && [bundleProbe isKindOfClass:[NSURL class]]) {
         NSDictionary *info = [NSBundle bundleWithURL:bundleProbe].infoDictionary;
@@ -6741,10 +6381,6 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         return container;
     }
 
-    // Not-yet-added modules have no live instance in iOS 16, so instantiate
-    // the module bundle's principal class directly for a real, inert render.
-    // Constructing a real CCUIContentModuleContext first (the way the instance
-    // manager does) lets far more modules initialize with proper glyphs/state.
     UIView *content = nil;
     id bundleValue = entry[@"bundleURL"];
     if ([bundleValue isKindOfClass:[NSURL class]]) {
@@ -6787,8 +6423,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
                 }
                 UIView *moduleContent = [contentController isKindOfClass:[UIViewController class]] ? contentController.view : nil;
                 if (moduleContent) {
-                    // Keep the module, controller, and context alive for the
-                    // preview's lifetime.
+
                     objc_setAssociatedObject(container, kCCAAddSheetModuleKey, module, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                     objc_setAssociatedObject(container, kCCAAddSheetControllerKey, contentController, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                     objc_setAssociatedObject(container, kCCAAddSheetContextKey, context, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -6802,9 +6437,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
                     } @catch (__unused NSException *exception) {}
                     [moduleContent setNeedsLayout];
                     @try { [moduleContent layoutIfNeeded]; } @catch (__unused NSException *exception) {}
-                    // Freshly instantiated content renders its accessory title
-                    // label on top of the glyph (real CC positions it outside
-                    // the platter). Hide any text; the sheet draws its own.
+
                     NSMutableArray<UIView *> *labelQueue = [NSMutableArray arrayWithObject:moduleContent];
                     while (labelQueue.count) {
                         UIView *candidate = labelQueue.firstObject;
@@ -6812,10 +6445,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
                         if ([candidate isKindOfClass:[UILabel class]]) candidate.hidden = YES;
                         [labelQueue addObjectsFromArray:candidate.subviews];
                     }
-                    // Detached module previews often carry a native 1x2/2x1
-                    // material mask underneath CCAster's outer backing. Make
-                    // every full-size surface share one continuous radius so
-                    // no second rounded layer peeks around the perimeter.
+
                     CCANormalizePreviewCornerRadii(moduleContent, container.bounds.size, radius);
                     content = moduleContent;
                 }
@@ -6823,8 +6453,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         } @catch (__unused NSException *exception) { content = nil; }
     }
     if (!content) {
-        // Curated SF Symbol stand-ins for modules that refuse to instantiate;
-        // the generic grid glyph is a last resort only.
+
         NSString *symbolName = CCAFallbackSymbolForIdentifier(identifier) ?: @"square.grid.2x2";
         UIImageSymbolConfiguration *configuration = [UIImageSymbolConfiguration configurationWithPointSize:26.0 weight:UIImageSymbolWeightMedium];
         UIImage *symbol = [UIImage systemImageNamed:symbolName withConfiguration:configuration] ?: [UIImage systemImageNamed:@"square.grid.2x2" withConfiguration:configuration];
@@ -6905,8 +6534,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     CCUILayoutSize size = [self catalogLayoutSizeForIdentifier:identifier];
     NSMutableDictionary<NSString *, NSValue *> *layout = [NSMutableDictionary dictionary];
     for (NSString *existing in gCCANativeLayoutRects) {
-        // Rects for previously removed modules linger in the native map; only
-        // modules that are actually part of Control Center occupy cells.
+
         if (![present containsObject:existing]) continue;
         CCUILayoutRect rect = {};
         [gCCANativeLayoutRects[existing] getValue:&rect];
@@ -6917,9 +6545,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         layout[existing] = [NSValue value:&rect withObjCType:@encode(CCUILayoutRect)];
     }
     CCUILayoutPoint destination = {0, 0};
-    // Prefer the page the user is visibly editing. If it is full, the paged
-    // allocator spills forward or opens a fresh page instead of silently
-    // routing new controls through stale pager state.
+
     NSUInteger startPage = CCADerivedVisiblePageForOverlay(overlay);
     BOOL found = CCAGuaranteedPagedSlot(identifier, size, startPage, layout, &destination);
     if (!found) return NO;
@@ -6939,8 +6565,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
 - (void)addControlSheetDidSelectIdentifier:(NSString *)identifier fromSheet:(UIViewController *)sheet {
     BOOL added = [self addModuleIdentifierToControlCenter:identifier];
     if (!added) {
-        // No legal slot (or already present): leave the sheet as-is for now;
-        // multi-page support will give this a real destination later.
+
         UINotificationFeedbackGenerator *feedback = [UINotificationFeedbackGenerator new];
         [feedback notificationOccurred:UINotificationFeedbackTypeWarning];
         return;
@@ -6965,9 +6590,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     [storedOrder exchangeObjectAtIndex:sourceIndex withObjectAtIndex:targetIndex];
     NSMutableDictionary *updatedSettings = [settings mutableCopy];
     updatedSettings[@"module-identifiers"] = storedOrder;
-    // Persist the Settings ordering without invoking the live provider setter.
-    // That setter rebuilds the complete CC collection and caused the whole
-    // surface to jump immediately after our origin-only layout had settled.
+
     return [updatedSettings writeToFile:configurationPath atomically:YES];
 }
 
@@ -6989,7 +6612,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         UIViewController *module = CCAModuleControllerForView(moduleView);
         UIVisualEffectView *border = objc_getAssociatedObject(moduleView, @selector(applyEditingToModule:editing:));
         UIButton *resizeButton = objc_getAssociatedObject(moduleView, kCCAResizeButtonKey);
-        [UIView animateWithDuration:0.22 animations:^{
+        [UIView animateWithDuration:0.0 animations:^{
             moduleView.transform = CGAffineTransformMakeScale(0.86, 0.86);
             moduleView.alpha = 0.0;
             border.alpha = 0.0;
@@ -7024,12 +6647,10 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     blur.clipsToBounds = YES;
     blur.userInteractionEnabled = NO;
     [moduleView addSubview:blur];
-    // The module's edit chrome is owned partly by the wrapper (border) and
-    // partly by the overlay root (remove/resize). None of it belongs to the
-    // rebuilt hierarchy, so it must leave with the module or it lingers.
+
     UIVisualEffectView *border = objc_getAssociatedObject(moduleView, @selector(applyEditingToModule:editing:));
     UIButton *resizeButton = objc_getAssociatedObject(moduleView, kCCAResizeButtonKey);
-    [UIView animateWithDuration:0.28 animations:^{
+    [UIView animateWithDuration:0.0 animations:^{
         blur.effect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemThinMaterial];
         moduleView.transform = CGAffineTransformMakeScale(0.88, 0.88);
         moduleView.alpha = 0.0;
@@ -7050,11 +6671,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
 }
 
 - (void)resettleAfterCollectionRebuild {
-    // Saving through the settings provider rebuilds the whole collection
-    // asynchronously: fresh wrappers arrive without the edit translation, the
-    // header pocket (and quick-access host) is replaced, and overlay-rooted
-    // controls for dead modules become orphans. Sweep repeatedly as the new
-    // hierarchy settles.
+
     for (NSNumber *delay in @[@0.15, @0.35, @0.65]) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay.doubleValue * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             UIViewController *overlay = gOverlayControllers.allObjects.firstObject;
@@ -7145,7 +6762,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             @try { [filter setValue:@(endRadius) forKey:@"inputRadius"]; } @catch (__unused NSException *exception) {}
             [presentation.layer addAnimation:blur forKey:@"CCAsterLabelBlurRadius"];
         }
-        [UIView animateWithDuration:0.18 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
+        [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
             presentation.alpha = appearing ? 1.0 : 0.0;
         } completion:^(__unused BOOL finished) {
             presentation.layer.filters = nil;
@@ -7202,12 +6819,9 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     objc_setAssociatedObject(presentation, kCCAResizePresentationTransitionKey, token, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     for (UIView *view in [presentation.superview.subviews copy]) if (view.tag == kCCAResizeBlurSnapshotTag) [view removeFromSuperview];
 
-    // Snapshot crossfades briefly rendered both label endpoints. During live
-    // resize that read as a third, floating label. Keep the content at its
-    // snapped endpoint and animate only its visibility.
     [presentation.layer removeAllAnimations];
     presentation.alpha = appearing ? 0.0 : 1.0;
-    [UIView animateWithDuration:0.16 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
+    [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
         presentation.alpha = appearing ? 1.0 : 0.0;
     } completion:^(__unused BOOL finished) {
         if (objc_getAssociatedObject(presentation, kCCAResizePresentationTransitionKey) != token) return;
@@ -7238,16 +6852,13 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
 
     UIView *presentation = [buttonView viewWithTag:kCCAResizePresentationTag];
     if (CCAModuleLooksExpandedNow(module)) {
-        // The compact labels are CCAster-owned and must not be copied into the
-        // system detail platter. Keep the source view intact, but suppress its
-        // adornment for the live expanded hierarchy.
+
         presentation.hidden = YES;
         presentation.alpha = 0.0;
         return;
     }
     presentation.hidden = NO;
-    // Un-hide path for overlays suppressed while their module was expanded;
-    // skip while a fade transition owns the alpha.
+
     if (presentation && !gCCAExpandedModuleOpen && presentation.alpha < 0.999 &&
         !objc_getAssociatedObject(presentation, kCCAResizePresentationTransitionKey)) {
         presentation.alpha = 1.0;
@@ -7275,16 +6886,9 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         return;
     }
     if (isNativeCompactButton) {
-        // Shortcut-style modules do not all use the same glyph class:
-        // Calculator uses an image host, while Flashlight and several system
-        // controls use a CAPackage host. Anchor whichever host is active to
-        // the same visual point for every supported size.
-        // Always merge direct hosts with the KVC-discovered host. Some modules
-        // retain separate active/inactive image views; stopping after the first
-        // match left the other view carrying the old -42pt translation.
+
         NSArray<UIView *> *glyphHosts = CCACompactGlyphHosts(buttonView);
-        // The platter grows around the compact control; its glyph does not
-        // travel between 1x1, 2x1, and 2x2 presentations.
+
         CGPoint target = CGPointMake(kCCAGridCellSize * 0.5, kCCAGridCellSize * 0.5);
         for (UIView *glyph in glyphHosts) {
             [UIView performWithoutAnimation:^{
@@ -7295,18 +6899,13 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
                     [glyph.layer removeAnimationForKey:@"bounds"];
                     [glyph.layer removeAnimationForKey:@"transform"];
                 }
-                // Several shortcut modules expose a module-sized image/package
-                // container through the same KVC keys as their actual glyph.
-                // Keep that container at the original compact footprint so its
-                // own centered artwork remains at the 1x1 visual coordinate.
+
                 if (CGRectGetWidth(glyph.bounds) > 72.0 || CGRectGetHeight(glyph.bounds) > 72.0) {
                     CGPoint compactOrigin = [buttonView convertPoint:CGPointZero toView:glyph.superview];
                     glyph.layer.transform = CATransform3DIdentity;
                     glyph.frame = (CGRect){compactOrigin, CGSizeMake(kCCAGridCellSize, kCCAGridCellSize)};
                 } else {
-                    // Centering and translating the same image host displaced it
-                    // by a second 42pt step in older builds. One fixed center is
-                    // the sole geometry writer for glyph-sized views.
+
                     glyph.layer.transform = CATransform3DIdentity;
                     glyph.center = [buttonView convertPoint:target toView:glyph.superview];
                 }
@@ -7331,8 +6930,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     if (!presentation) {
         presentation = [[UIView alloc] initWithFrame:buttonView.bounds];
         presentation.tag = kCCAResizePresentationTag;
-        // Never expose the newly created labels for a frame before their
-        // blurred reveal owns the transition.
+
         presentation.alpha = 0.0;
         presentation.userInteractionEnabled = NO;
         presentation.backgroundColor = UIColor.clearColor;
@@ -7451,9 +7049,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     }
     [self applyResizedPresentationToModule:module];
     CCAConfigureOddResizedModuleLayout(module);
-    // Connectivity's individual button controllers lay themselves out after
-    // their container. Re-apply the compact iOS 18 arrangement from CCAster's
-    // stable module refresh path as well as the controller hook below.
+
     UIViewController *connectivity = CCAConnectivityChild(module, @"CCUIConnectivityModuleViewController");
     if ([NSStringFromClass(module.class) isEqualToString:@"CCUIConnectivityModuleViewController"]) connectivity = module;
     if (connectivity) CCAConfigureConnectivityLayout(connectivity);
@@ -7463,9 +7059,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     if (!gEnabled || !module.view) return;
     UIView *moduleView = module.view;
     CGFloat radius = [self refinedCornerRadiusForModuleView:moduleView];
-    // The platter-return animation targets the container's stored compact
-    // radius. Seed it with the refined value so modules come home at the
-    // tweaked radius instead of settling native and snapping afterwards.
+
     UIView *contentContainer = CCAFindAncestorOrSubviewWithClassName(moduleView, @"CCUIContentModuleContentContainerView");
     CCASetContinuousCornerRadiusIvar(contentContainer, @"_compactContinuousCornerRadius", radius);
     CCASetContinuousCornerRadiusIvar(contentContainer, @"_expandedContinuousCornerRadius", radius);
@@ -7559,7 +7153,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     }
     ((void (*)(id, SEL, id, id))objc_msgSend)(provider, regenerateSelector, order, sizes);
     [collection.view setNeedsLayout];
-    [UIView animateWithDuration:0.20 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
+    [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
         [collection.view layoutIfNeeded];
     } completion:nil];
 }
@@ -7618,7 +7212,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     CFPreferencesAppSynchronize(kCCAPrefsDomain);
     UIViewController *collection = [self moduleCollectionControllerInOverlay:overlay];
     [collection.view setNeedsLayout];
-    [UIView animateWithDuration:0.22 animations:^{ [collection.view layoutIfNeeded]; }];
+    [UIView animateWithDuration:0.0 animations:^{ [collection.view layoutIfNeeded]; }];
     return YES;
 }
 
@@ -7664,7 +7258,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     CFPreferencesAppSynchronize(kCCAPrefsDomain);
     UIViewController *collection = [self moduleCollectionControllerInOverlay:overlay];
     [collection.view setNeedsLayout];
-    [UIView animateWithDuration:0.22 animations:^{ [collection.view layoutIfNeeded]; }];
+    [UIView animateWithDuration:0.0 animations:^{ [collection.view layoutIfNeeded]; }];
     return YES;
 }
 
@@ -7747,7 +7341,6 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     if (!displacedAny) return NO;
     if (!CCALogicalLayoutIsLegal(proposed, maxRows)) return NO;
 
-    // Commit every changed origin together only after the complete cascade fits.
     NSUInteger sourcePageStart = page * kCCAMinimumGridRows;
     gCCACustomOrigins[sourceID] = @[@(destination.x), @(sourcePageStart + destination.y)];
     for (NSString *identifier in proposed) {
@@ -7762,7 +7355,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     CFPreferencesAppSynchronize(kCCAPrefsDomain);
     UIViewController *collection = [self moduleCollectionControllerInOverlay:overlay];
     [collection.view setNeedsLayout];
-    [UIView animateWithDuration:0.22 animations:^{ [collection.view layoutIfNeeded]; }];
+    [UIView animateWithDuration:0.0 animations:^{ [collection.view layoutIfNeeded]; }];
     return YES;
 }
 
@@ -7780,11 +7373,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     NSValue *sourceValue = gCCANativeLayoutRects[sourceID];
     if (!sourceValue) return NO;
     NSUInteger pageStart = gCCACurrentPage * kCCAMinimumGridRows;
-    // gCCANativeLayoutRects is process-wide and intentionally survives native
-    // provider rebuilds. It can therefore contain controls that were removed,
-    // disabled, or last lived beyond the current eight-row page. Including
-    // those stale rects made the final legality check reject every resize --
-    // even a shrink that could not collide with anything visible.
+
     NSMutableDictionary<NSString *, NSValue *> *initial = [NSMutableDictionary dictionary];
     for (UIViewController *module in CCACollectModuleControllers(overlay)) {
         NSString *identifier = CCAModuleIdentifier(module);
@@ -7818,10 +7407,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         if (a.origin.x != b.origin.x) return a.origin.x < b.origin.x ? NSOrderedAscending : NSOrderedDescending;
         return [left compare:right];
     }];
-    // Keep the resized module fixed, preserve every unaffected module at its
-    // current origin, and move only modules whose footprints now collide. The
-    // old cascade could only push downward in the same columns, so it rejected
-    // otherwise legal resizes whenever that path reached row eight.
+
     NSMutableArray<NSString *> *placed = [NSMutableArray arrayWithObject:sourceID];
     NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *overflowOrigins = [NSMutableDictionary dictionary];
     NSMutableDictionary<NSString *, NSValue *> *globalOccupied = [NSMutableDictionary dictionary];
@@ -7865,8 +7451,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
                     NSUInteger horizontal = column > original.origin.x ? column - original.origin.x : original.origin.x - column;
                     NSUInteger vertical = row > original.origin.y ? row - original.origin.y : original.origin.y - row;
                     NSUInteger distance = horizontal + vertical;
-                    // Prefer the closest legal footprint. For an equal move,
-                    // favor upward placement, then retain the original column.
+
                     BOOL betterTie = found && distance == bestDistance &&
                         (row < best.origin.y || (row == best.origin.y && horizontal < (best.origin.x > original.origin.x ? best.origin.x - original.origin.x : original.origin.x - best.origin.x)));
                     if (!found || distance < bestDistance || betterTie) {
@@ -7892,9 +7477,6 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         [placed addObject:identifier];
     }
 
-    // Nothing is committed unless the complete post-resize layout fits inside
-    // the fixed 4x8 grid.  This also rejects unchanged modules that were pushed
-    // or inherited into an illegal ninth row.
     if (!CCALogicalLayoutIsLegal(proposed, kCCAMinimumGridRows)) return NO;
 
     for (NSString *identifier in proposed) {
@@ -7918,11 +7500,9 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     if ([context respondsToSelector:NSSelectorFromString(@"requestLayoutSizeUpdate")]) ((void (*)(id, SEL))objc_msgSend)(context, NSSelectorFromString(@"requestLayoutSizeUpdate"));
     UIViewController *collection = [self moduleCollectionControllerInOverlay:overlay];
     [collection.view setNeedsLayout];
-    [UIView animateWithDuration:0.24 animations:^{ [collection.view layoutIfNeeded]; } completion:^(__unused BOOL finished) {
+    [UIView animateWithDuration:0.0 animations:^{ [collection.view layoutIfNeeded]; } completion:^(__unused BOOL finished) {
         for (UIViewController *candidate in CCACollectModuleControllers(overlay)) [self applyEditingToModule:candidate editing:YES];
-        // The edit grid caches the module frames that hide its vacant-cell
-        // circles. A resize changes the footprint without recreating edit mode,
-        // so refresh that cache as soon as the native layout has settled.
+
         if (gEditModeActive) {
             [self prepareGridForOverlay:overlay collection:collection];
             NSMutableDictionary<NSNumber *, CCAEditGridView *> *pageGrids = objc_getAssociatedObject(overlay, kCCAEditPageGridsKey);
@@ -8036,16 +7616,14 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             CGRect startFrame = CGRectMake(CGRectGetMinX(moduleView.frame), CGRectGetMinY(moduleView.frame), CGRectGetWidth(moduleView.bounds), CGRectGetHeight(moduleView.bounds));
             objc_setAssociatedObject(gesture, kCCAResizePreviewStartFrameKey, [NSValue valueWithCGRect:startFrame], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             UIView *buttonView = CCAFindSubviewWithClassName(moduleView, @"CCUIButtonModuleView");
-            // Modules without a button hierarchy (now playing) host the snap
-            // preview override on the module view itself so descendant layout
-            // (CCAResizedPreviewSizeForDescendant) tracks the candidate size.
+
             UIView *overrideHost = buttonView ?: moduleView;
             if (overrideHost) {
                 objc_setAssociatedObject(overrideHost, kCCAResizePreviewKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
                 objc_setAssociatedObject(overrideHost, kCCAResizePresentationSizeOverrideKey, @[@(start.width), @(start.height)], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             }
         }
-        [UIView animateWithDuration:0.12 animations:^{ handle.transform = CGAffineTransformMakeScale(1.08, 1.08); handle.alpha = 1.0; }];
+        [UIView animateWithDuration:0.0 animations:^{ handle.transform = CGAffineTransformMakeScale(1.08, 1.08); handle.alpha = 1.0; }];
         CCAHaptic();
         return;
     }
@@ -8069,8 +7647,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
                 CGRect handleFrame = handleHost == wrapper ? liveFrame : [wrapper convertRect:liveFrame toView:handleHost];
                 handle.frame = CGRectMake(CGRectGetMaxX(handleFrame) - 42.0, CGRectGetMaxY(handleFrame) - 42.0, 42.0, 42.0);
                 CGRect visibleFrame = [wrapper convertRect:liveFrame toView:overlay.view];
-                // Treat the live resize footprint like a drag landing region so
-                // newly covered vacant-cell circles fade before the snap commits.
+
                 NSValue *layoutValue = gCCANativeLayoutRects[identifier];
                 NSUInteger page = gCCACurrentPage;
                 if (layoutValue) {
@@ -8100,15 +7677,11 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     }
 
     if (gesture.state == UIGestureRecognizerStateEnded || gesture.state == UIGestureRecognizerStateCancelled || gesture.state == UIGestureRecognizerStateFailed) {
-        [UIView animateWithDuration:0.16 animations:^{ handle.transform = CGAffineTransformIdentity; handle.alpha = 1.0; }];
+        [UIView animateWithDuration:0.0 animations:^{ handle.transform = CGAffineTransformIdentity; handle.alpha = 1.0; }];
         BOOL committed = NO;
         UIView *buttonView = CCAFindSubviewWithClassName(moduleView, @"CCUIButtonModuleView");
         if (gesture.state == UIGestureRecognizerStateEnded && (candidate.width != start.width || candidate.height != start.height)) {
-            // The private button hierarchy recenters one of its intermediate
-            // glyph containers during the native resize. Preserve the exact
-            // on-screen glyph above that moving hierarchy until it settles;
-            // otherwise a correct endpoint correction appears as an opposite-
-            // direction jump during the animation.
+
             if (base.width == 1 && base.height == 1 && overlay.view) {
                 CCABeginResizeGlyphHandoff(moduleView, buttonView, overlay.view);
             }
@@ -8120,9 +7693,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             }
         }
         if (committed) {
-            // Native layout begins as soon as applyGridResize returns. Release
-            // the preview suppression now so every layout frame during that
-            // animation reapplies the invariant compact glyph anchor.
+
             UIView *commitOverrideHost = buttonView ?: moduleView;
             if (commitOverrideHost) {
                 objc_setAssociatedObject(commitOverrideHost, kCCAResizePreviewKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -8132,7 +7703,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             endpointFrame.size = CGSizeMake(kCCAGridCellSize + (candidate.width - 1) * kCCAGridStep,
                                             kCCAGridCellSize + (candidate.height - 1) * kCCAGridStep);
             UIVisualEffectView *border = objc_getAssociatedObject(moduleView, @selector(applyEditingToModule:editing:));
-            [UIView animateWithDuration:0.24 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
+            [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
                 moduleView.frame = endpointFrame;
                 moduleView.layer.cornerRadius = [self editingModuleCornerRadiusForSize:endpointFrame.size];
                 [self configureEditingBorder:border moduleFrame:endpointFrame];
@@ -8179,7 +7750,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             CCAEndResizeGlyphHandoff(moduleView);
         };
         if (committed) dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.30 * NSEC_PER_SEC)), dispatch_get_main_queue(), finishPreview);
-        else [UIView animateWithDuration:0.20 animations:finishPreview];
+        else [UIView animateWithDuration:0.0 animations:finishPreview];
         objc_setAssociatedObject(gesture, kCCAResizeStartSizeKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(gesture, kCCAResizeCandidateSizeKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(gesture, kCCAResizePreviewStartFrameKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -8251,9 +7822,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         proxyMaterial.layer.cornerCurve = kCACornerCurveContinuous;
         proxyMaterial.clipsToBounds = YES;
         [proxy addSubview:proxyMaterial];
-        // Material and the edit ring are already owned by the proxy. Capture
-        // only module content so the wrapper's original border cannot become a
-        // second ring or a stationary-looking ghost in the drag snapshot.
+
         UIView *proxyContent = [moduleView snapshotViewAfterScreenUpdates:YES];
         if (!proxyContent) proxyContent = [moduleView resizableSnapshotViewFromRect:moduleView.bounds afterScreenUpdates:YES withCapInsets:UIEdgeInsetsZero];
         proxyContent.frame = proxy.bounds;
@@ -8395,16 +7964,13 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         dragBorder.alpha = 0.0;
         dragBorder.hidden = YES;
         [overlay.view bringSubviewToFront:proxy];
-        [UIView animateWithDuration:0.16 animations:^{ proxy.transform = CGAffineTransformMakeScale(1.04, 1.04); proxy.alpha = 0.92; }];
+        [UIView animateWithDuration:0.0 animations:^{ proxy.transform = CGAffineTransformMakeScale(1.04, 1.04); proxy.alpha = 0.92; }];
     } else if (gesture.state == UIGestureRecognizerStateChanged) {
         if (!moduleView) return;
         BOOL moved = hypot(translation.x, translation.y) >= 9.0;
         if (moved) objc_setAssociatedObject(gesture, kCCADragMovedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         UIView *proxy = objc_getAssociatedObject(gesture, kCCADragProxyKey);
-        // Translate in overlay coordinates first, then retain the small lifted
-        // scale around the proxy.  Reversing these transforms scales the drag
-        // distance too, which makes the independently hosted corner controls
-        // drift farther away the longer the module is moved.
+
         proxy.transform = CGAffineTransformConcat(CGAffineTransformMakeTranslation(translation.x, translation.y), CGAffineTransformMakeScale(1.04, 1.04));
         CGRect proxyStartFrame = [objc_getAssociatedObject(gesture, kCCADragProxyStartFrameKey) CGRectValue];
         CGRect draggedFrame = CGRectOffset(proxyStartFrame, translation.x, translation.y);
@@ -8412,9 +7978,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         objc_setAssociatedObject(gesture, kCCADragStartPageKey, @(dragPage), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         CCAEditGridView *grid = [self editGridForPage:dragPage overlay:overlay];
         if (!grid) grid = objc_getAssociatedObject(overlay, kCCAEditGridKey);
-        // Edge dwell auto-paging: the finger must sit beyond the actual
-        // first/last grid row for a beat. A fixed screen band fired while a
-        // module was merely high or low on the current page.
+
         if (gPagingEnabled && moved && grid.slotRects.count) {
             CGRect gridBounds = CGRectNull;
             for (NSValue *slotValue in grid.slotRects) {
@@ -8457,9 +8021,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         CGPoint proposedOriginOverlay = CGPointMake(currentPoint.x - grabOffset.x, currentPoint.y - grabOffset.y);
         CGPoint proposedOriginGrid = [overlay.view convertPoint:proposedOriginOverlay toView:grid];
         CGRect proposed = (CGRect){proposedOriginGrid, startFrame.size};
-        // Snap the proposed top-left corner to the nearest logical grid slot.
-        // This is the destination for true anywhere placement even when no
-        // other module exists beneath the dragged footprint.
+
         NSUInteger nearestSlot = NSNotFound;
         CGFloat nearestSlotDistance = CGFLOAT_MAX;
         NSUInteger footprintColumns = MAX(1, (NSUInteger)llround((CGRectGetWidth(startFrame) + kCCAGridGap) / kCCAGridStep));
@@ -8490,9 +8052,6 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             [self clearEditGridLandingRectsForOverlay:overlay];
         }
 
-        // The proxy is the one geometry guaranteed to match what is visibly
-        // under the finger. Use its unscaled frame for target acquisition so
-        // edit-mode collection/grid translations cannot bias the drop row.
         CGPoint previewCenter = CGPointMake(CGRectGetMidX(draggedFrame), CGRectGetMidY(draggedFrame));
         UIViewController *previewTargetController = nil;
         CGFloat bestOverlap = 0.0;
@@ -8562,11 +8121,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         if (!grid) grid = objc_getAssociatedObject(overlay, kCCAEditGridKey);
         UIView *previewTarget = objc_getAssociatedObject(gesture, kCCADragPreviewTargetKey);
         BOOL moved = [objc_getAssociatedObject(gesture, kCCADragMovedKey) boolValue];
-        // Heuristic removal: a press that never became a drag and lifted near the
-        // module's top-left corner (the remove bubble) is read as a remove. The
-        // module is otherwise restored in place by the normal (no-target) path
-        // below; the actual removal is fired from the settle block so it reuses
-        // all of that teardown instead of duplicating it.
+
         __block BOOL heuristicRemove = NO;
         UIButton *heuristicRemoveButton = nil;
         if (!moved && gesture.state == UIGestureRecognizerStateEnded && gRemovalButtonsEnabled) {
@@ -8585,10 +8140,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         }
         NSString *targetID = nil;
         if (moved) {
-            // A normal quick release can arrive before the short preview dwell
-            // promotes the newest candidate. The pending ID is already derived
-            // from the current visible overlap, so it is the authoritative
-            // release target; the committed preview is only the fallback.
+
             targetID = objc_getAssociatedObject(gesture, kCCADragPendingTargetIDKey);
             if (!targetID.length) targetID = objc_getAssociatedObject(gesture, kCCADragPreviewTargetIDKey);
         }
@@ -8622,9 +8174,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             if (appliedExplicitSwap) {
                 [self persistStoredOrderBySwappingSource:sourceID target:targetID];
             } else {
-                // A rejected explicit footprint must return to its source. The
-                // old ordered-provider fallback can repack differently sized
-                // modules into an overlapping layout during a fast release.
+
                 didSwap = NO;
                 targetID = nil;
             }
@@ -8649,12 +8199,10 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             CGRect moduleFrame = sourceController ? [sourceController.view convertRect:sourceController.view.bounds toView:overlay.view] : [moduleView convertRect:moduleView.bounds toView:overlay.view];
             [self positionEditControlsForModuleView:moduleView overlay:overlay overlayFrame:moduleFrame];
             restoreHiddenChrome();
-            [UIView animateWithDuration:0.12 animations:^{ remove.alpha = 1.0; resize.alpha = 1.0; }];
+            [UIView animateWithDuration:0.0 animations:^{ remove.alpha = 1.0; resize.alpha = 1.0; }];
         };
         if (didSwap) {
-            // The settings provider immediately replaces/repositions the module
-            // containers. Returning the outgoing view to its old frame with an
-            // animation creates a visible fly-in from the drag destination.
+
             [UIView performWithoutAnimation:^{
                 moduleView.transform = CGAffineTransformIdentity;
                 moduleView.alpha = 0.0;
@@ -8665,7 +8213,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
                 previewTarget.transform = CGAffineTransformIdentity;
             }];
         } else {
-            [UIView animateWithDuration:0.24 animations:^{
+            [UIView animateWithDuration:0.0 animations:^{
                 moduleView.transform = CGAffineTransformIdentity;
                 moduleView.alpha = 1.0;
                 UIVisualEffectView *dragBorder = objc_getAssociatedObject(moduleView, @selector(applyEditingToModule:editing:));
@@ -8688,7 +8236,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
                 settledBorder.hidden = YES;
                 CGRect visibleProxyFrame = dragProxy.layer.presentationLayer ? ((CALayer *)dragProxy.layer.presentationLayer).frame : dragProxy.frame;
                 [UIView performWithoutAnimation:^{ dragProxy.transform = CGAffineTransformIdentity; dragProxy.frame = visibleProxyFrame; }];
-                [UIView animateWithDuration:0.20 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
+                [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
                     dragProxy.frame = destination;
                     dragProxy.alpha = 0.88;
                 } completion:^(__unused BOOL finished) {
@@ -8696,7 +8244,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
                     settledBorder.alpha = 1.0;
                     settledBorder.hidden = NO;
                     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.10 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                        [UIView animateWithDuration:0.18 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
+                        [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
                             dragProxy.alpha = 0.0;
                         } completion:^(__unused BOOL finished) {
                             [dragProxy removeFromSuperview];
@@ -8705,7 +8253,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
                 }];
             });
         } else if (dragProxy) {
-            [UIView animateWithDuration:0.20 animations:^{ dragProxy.transform = CGAffineTransformIdentity; } completion:^(__unused BOOL finished) {
+            [UIView animateWithDuration:0.0 animations:^{ dragProxy.transform = CGAffineTransformIdentity; } completion:^(__unused BOOL finished) {
                 moduleView.alpha = 1.0;
                 UIVisualEffectView *dragBorder = objc_getAssociatedObject(moduleView, @selector(applyEditingToModule:editing:));
                 dragBorder.alpha = 1.0;
@@ -8714,16 +8262,12 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
                 [dragProxy removeFromSuperview];
             }];
         }
-        // The provider relays out both sides of a swap asynchronously. Removal
-        // controls are now wrapper-hosted, so resynchronize every control as
-        // those new module frames settle instead of updating only the source.
+
         for (NSNumber *delay in @[@0.02, @0.14, @0.30]) {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay.doubleValue * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 NSMutableSet<UIButton *> *validButtons = [NSMutableSet set];
                 for (UIViewController *candidate in CCACollectModuleControllers(overlay)) {
-                    // Swaps may create replacement containers after their first
-                    // layout pass. Reapply both the refined clipping radius and
-                    // edit chrome to those new views before they become visible.
+
                     [self applyEditingToModule:candidate editing:YES];
                     UIButton *candidateRemove = objc_getAssociatedObject(candidate.view, kCCARemoveButtonKey);
                     if (candidateRemove) [validButtons addObject:candidateRemove];
@@ -8731,7 +8275,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
                 for (UIView *subview in [overlay.view.subviews copy]) {
                     if (subview.tag == kCCARemoveButtonTag && ![validButtons containsObject:(UIButton *)subview]) [subview removeFromSuperview];
                 }
-                [UIView animateWithDuration:0.18 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
+                [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
                     for (UIViewController *candidate in CCACollectModuleControllers(overlay)) {
                         UIButton *candidateRemove = objc_getAssociatedObject(candidate.view, kCCARemoveButtonKey);
                         if (!candidateRemove || candidateRemove.hidden) continue;
@@ -8785,15 +8329,9 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             gCCADragInProgress = NO;
             gCCAActiveDragModuleView = nil;
             gCCAActiveDragModuleIdentifier = nil;
-            // A heuristic remove (tap near the top-left corner) reuses the normal
-            // restore-in-place teardown above, then removes the module here so no
-            // drag bookkeeping is duplicated.
+
             if (heuristicRemove && heuristicRemoveButton) [self removeTapped:heuristicRemoveButton];
-            // Re-sanitise the whole layout once the drop has settled. Each commit
-            // path (swap / move / insertion) only validates the page it touched;
-            // this guarantees the persisted layout is globally consistent — every
-            // control placed, nothing overlapping, no stale entries — before the
-            // next Control Center presentation can read it.
+
             [self normalizePagedLayoutForOverlay:settleOverlay];
             [self updatePagedModuleVisibilityForOverlay:settleOverlay showAdjacent:NO];
             [self updateEditControlFramesForOverlay:settleOverlay];
@@ -8908,9 +8446,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         }
         CGRect moduleFrame = [view convertRect:view.bounds toView:overlay.view];
         [self positionEditControlsForModuleView:view overlay:overlay overlayFrame:moduleFrame];
-        // A broad circular arc follows the module's continuous bottom-right
-        // corner instead of forming a tight, unrelated elbow. Its centerline
-        // sits on the edit border so the ring visually bisects the grabber.
+
         UIBezierPath *cornerPath = [UIBezierPath bezierPath];
         [cornerPath moveToPoint:CGPointMake(20.29, 40.01)];
         [cornerPath addCurveToPoint:CGPointMake(40.01, 20.29)
@@ -8921,9 +8457,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         materialMask.path = cornerPath.CGPath;
         materialMask.fillColor = UIColor.clearColor.CGColor;
         materialMask.strokeColor = UIColor.blackColor.CGColor;
-        // Keep the live material wholly beneath the translucent 12.5pt pill.
-        // A wider mask leaked past the stroke over dark modules and read as a
-        // one-sided outline even though the foreground shape had no border.
+
         materialMask.lineWidth = 12.0;
         materialMask.lineCap = kCALineCapRound;
         materialMask.lineJoin = kCALineJoinRound;
@@ -8970,10 +8504,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         }
         if (identifier.length) objc_setAssociatedObject(remove, @selector(removeTapped:), identifier, OBJC_ASSOCIATION_COPY_NONATOMIC);
         objc_setAssociatedObject(remove, kCCARemoveModuleViewKey, view, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        // The remove bubble is now a visual affordance only; it must not swallow
-        // touches or the module underneath it can't be picked up. Removal is
-        // triggered heuristically from the drag recogniser on drop (a tap that
-        // never moved, released near this top-left corner).
+
         remove.userInteractionEnabled = NO;
         CGRect moduleFrame = [view convertRect:view.bounds toView:overlay.view];
         [self positionEditControlsForModuleView:view overlay:overlay overlayFrame:moduleFrame];
@@ -9030,8 +8561,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
 - (NSArray<UIView *> *)chromeViewsInOverlay:(UIViewController *)overlay excludingCollection:(UIViewController *)collection {
     NSMutableArray<UIView *> *views = [NSMutableArray array];
     UIView *host = [overlay.view viewWithTag:181000];
-    // A host nested under native header chrome inherits that chrome's transform
-    // and alpha. Only animate it directly on the compatibility fallback path.
+
     if (host && host.superview == overlay.view) [views addObject:host];
     UIView *topFade = [overlay.view viewWithTag:kCCATopFadeTag];
     if (topFade) [views addObject:topFade];
@@ -9334,10 +8864,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     for (UIViewController *module in CCACollectModuleControllers(overlay)) {
         if (CCAIsOwnedDuplicateModuleController(module)) continue;
         UIView *wrapper = module.view.superview;
-        // Some sparse/late-created pages attach a module directly to the
-        // collection view. Treating the collection itself as a per-module
-        // wrapper overwrites the page transform with the edit-mode -48pt
-        // wrapper offset, which makes every nonzero page disappear.
+
         if (wrapper == collection.view) continue;
         if (wrapper && ![moduleWrappers containsObject:wrapper]) {
             [moduleWrappers addObject:wrapper];
@@ -9374,7 +8901,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             [self prepareGridForOverlay:overlay collection:collection];
             NSMutableDictionary<NSNumber *, CCAEditGridView *> *finalPageGrids = objc_getAssociatedObject(overlay, kCCAEditPageGridsKey);
             for (CCAEditGridView *pageGrid in finalPageGrids.allValues) pageGrid.alpha = 0.0;
-            [UIView animateWithDuration:0.12 animations:^{ for (CCAEditGridView *pageGrid in finalPageGrids.allValues) pageGrid.alpha = 1.0; }];
+            [UIView animateWithDuration:0.0 animations:^{ for (CCAEditGridView *pageGrid in finalPageGrids.allValues) pageGrid.alpha = 1.0; }];
             [overlay.view bringSubviewToFront:touchShield];
             [overlay.view bringSubviewToFront:addControl];
             for (UIViewController *module in CCACollectModuleControllers(overlay)) {
@@ -9383,14 +8910,10 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
                 if (remove) [remove.superview bringSubviewToFront:remove];
                 if (resize) [resize.superview bringSubviewToFront:resize];
             }
-            // The full-screen edit grid and touch shield are inserted after
-            // the pager host. Keep the visible indicator gutter above both so
-            // dense pages can scrub immediately, not only after one switch.
+
             UIView *pageIndicators = [overlay.view viewWithTag:kCCAPageIndicatorHostTag];
             if (pageIndicators && !pageIndicators.hidden) [overlay.view bringSubviewToFront:pageIndicators];
-            // The wrapper translation is committed at the end of this block.
-            // Re-read converted frames afterward so first-open controls do not
-            // retain the pre-edit vertical coordinate until the next resize.
+
             [self updateEditControlFramesForOverlay:overlay];
             dispatch_async(dispatch_get_main_queue(), ^{ [self updateEditControlFramesForOverlay:overlay]; });
         } else {
@@ -9402,12 +8925,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             [oldGridStack removeFromSuperview];
             objc_setAssociatedObject(overlay, kCCAEditGridStackKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             objc_setAssociatedObject(overlay, kCCAEditGridKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            // The private module collection performs one more layout pass as
-            // edit mode finishes. On nonzero pages that pass can replace our
-            // collection transform with its native identity transform, which
-            // leaves the selected page one full span below the viewport. The
-            // edit animation already targets this exact settled transform, so
-            // reassert it at completion and once after the deferred layout.
+
             [self applyPageTransformToOverlay:overlay animated:NO];
             [self updatePagedModuleVisibilityForOverlay:overlay showAdjacent:NO];
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.12 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -9418,7 +8936,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             });
         }
     };
-    if (animated) [UIView animateWithDuration:0.28 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:changes completion:completion];
+    if (animated) [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut | UIViewAnimationOptionBeginFromCurrentState animations:changes completion:completion];
     else { changes(); completion(YES); }
 }
 
@@ -9427,8 +8945,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     if (gCCADragInProgress || gCCAPagerTransitionActive || gCCAPagerScrubbingActive) return;
     UIButton *addControl = (UIButton *)[overlay.view viewWithTag:kCCAAddControlButtonTag];
     if (addControl) {
-        // Centered in the blank space between the last module row and the
-        // bottom of the display, sitting just above the home indicator.
+
         [addControl sizeToFit];
         CGSize size = CGSizeMake(CGRectGetWidth(addControl.bounds), 30.0);
         CGRect bounds = overlay.view.bounds;
@@ -9441,10 +8958,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         UIButton *remove = objc_getAssociatedObject(module.view, kCCARemoveButtonKey);
         UIButton *resize = objc_getAssociatedObject(module.view, kCCAResizeButtonKey);
         CGRect moduleFrame = [module.view convertRect:module.view.bounds toView:overlay.view];
-        // Borders live with their module wrapper and are naturally clipped by
-        // the moving collection. Remove/resize controls live on overlay.view,
-        // so explicitly cull them when their owner is outside the viewport;
-        // otherwise chrome from the adjacent page floats over blank space.
+
         CGRect chromeViewport = CGRectInset(overlay.view.bounds, -24.0, -24.0);
         NSString *identifier = CCAModuleIdentifier(module);
         BOOL activeDragSource = CCAIsActiveDragModuleIdentifier(identifier);
@@ -9487,7 +9001,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         UIVisualEffectView *border = objc_getAssociatedObject(module.view, @selector(applyEditingToModule:editing:));
         UIButton *remove = objc_getAssociatedObject(module.view, kCCARemoveButtonKey);
         UIButton *resize = objc_getAssociatedObject(module.view, kCCAResizeButtonKey);
-        if (clamped < 0.999) [border.layer removeAnimationForKey:@"CCAsterBreathing"];
+        if (clamped < 0.999) 
         border.alpha = clamped;
         remove.alpha = clamped;
         resize.alpha = clamped;
@@ -9516,9 +9030,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         [self setEditPresentation:editing forOverlay:overlay animated:YES];
         [self updatePageIndicatorsForOverlay:overlay];
         [self updatePagedModuleVisibilityForOverlay:overlay showAdjacent:NO];
-        // Sheet presentation/dismissal can run the CC state callbacks while
-        // editing is active, leaving the quick-access host hidden with nothing
-        // to re-show it. Manage its visibility explicitly on edit transitions.
+
         [self setQuickAccessButtonsHidden:(editing || gCCAExpandedModuleOpen || !gCCAControlCenterPresented) forOverlay:overlay animated:YES];
     }
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.32 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -9563,8 +9075,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.previewCache = [NSMutableDictionary dictionary];
-    // Control Center is a dark surface regardless of system appearance; an
-    // opaque dark sheet keeps module platters and text readable in both modes.
+
     self.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
     self.view.backgroundColor = [UIColor colorWithRed:0.11 green:0.11 blue:0.12 alpha:1.0];
 
@@ -9576,9 +9087,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     search.tintColor = UIColor.whiteColor;
     search.delegate = self;
     search.searchTextField.textColor = UIColor.whiteColor;
-    // Minimal style suppresses the field's own backing and quietly discards
-    // backgroundColor set on the text field. A resizable background image is
-    // the one supported path that reliably draws the pill.
+
     CGFloat fieldHeight = 42.0, fieldRadius = 12.0;
     UIGraphicsImageRenderer *fieldRenderer = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(fieldRadius * 2.0 + 2.0, fieldHeight)];
     UIImage *fieldImage = [fieldRenderer imageWithActions:^(__unused UIGraphicsImageRendererContext *context) {
@@ -9618,7 +9127,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     NSString *query = self.query ?: @"";
     NSMutableArray<NSDictionary *> *sections = [NSMutableArray array];
     if (!query.length) {
-        // Suggested strip: headerless, directly below the search bar.
+        
         NSArray<NSString *> *priority = @[@"flashlightmodule", @"controlcenter.timer", @"alarmmodule", @"calculatormodule", @"cameramodule", @"appearancemodule", @"qrcodemodule", @"magnifiermodule", @"lowpowermodule", @"hearingdevices", @"controlcenter.screencapture", @"nfccontrolcenter"];
         NSMutableArray *suggested = [NSMutableArray array];
         NSMutableSet<NSString *> *suggestedIdentifiers = [NSMutableSet set];
@@ -9635,9 +9144,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
                 break;
             }
         }
-        // Fill the rest of the three-row suggestion area by rotating through
-        // categories. This keeps it varied as controls are added or removed
-        // instead of turning the final rows into one alphabetical category.
+
         NSArray<NSString *> *suggestionCategories = @[@"Accessibility", @"Capture", @"Clock", @"Display", @"Focus", @"Home", @"Media", @"Notes", @"Voice Memos", @"Wallet", @"Utilities", @"Tweaks"];
         BOOL addedSuggestion = YES;
         while (suggested.count < 12 && addedSuggestion) {
@@ -9676,9 +9183,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
 
 - (UIView *)previewForEntry:(NSDictionary *)entry usedIdentifiers:(NSMutableSet<NSString *> *)usedIdentifiers {
     NSString *identifier = entry[@"identifier"];
-    // The same entry can appear in Suggested AND its category, but one view
-    // instance can only live in one cell — duplicates get a fresh, uncached
-    // preview instead of stealing the cached one.
+
     BOOL firstUse = identifier && ![usedIdentifiers containsObject:identifier];
     if (identifier) [usedIdentifiers addObject:identifier];
     UIView *preview = firstUse ? self.previewCache[identifier] : nil;
@@ -9698,7 +9203,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
 
     CGFloat width = CGRectGetWidth(self.view.bounds);
     CGFloat gap = kCCAGridGap;
-    CGFloat contentWidth = 4.0 * kCCAGridCellSize + 3.0 * gap; // one Control Center page wide
+    CGFloat contentWidth = 4.0 * kCCAGridCellSize + 3.0 * gap; 
     CGFloat margin = MAX(16.0, (width - contentWidth) / 2.0);
     CGFloat labelBand = 38.0;
     CGFloat y = 6.0;
@@ -9707,7 +9212,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     for (NSDictionary *section in [self visibleSections]) {
         NSString *title = section[@"title"];
         if ([title length]) {
-            // The hairline sits above the header so it caps the previous group.
+            
             UIView *divider = [[UIView alloc] initWithFrame:CGRectMake(margin, y, contentWidth, 1.0 / UIScreen.mainScreen.scale)];
             divider.backgroundColor = [UIColor.whiteColor colorWithAlphaComponent:0.16];
             [container addSubview:divider];
@@ -9719,9 +9224,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
             [container addSubview:header];
             y += 28.0;
         }
-        // Pack each category on a real four-column occupancy map. The preview
-        // supplies the current footprint, so resized/live controls naturally
-        // influence the arrangement the next time the sheet opens.
+
         NSMutableArray<NSDictionary *> *items = [NSMutableArray array];
         NSUInteger originalIndex = 0;
         for (NSDictionary *entry in section[@"entries"]) {
@@ -9827,8 +9330,8 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     if (gesture.state != UIGestureRecognizerStateRecognized) return;
     NSString *identifier = objc_getAssociatedObject(gesture.view, @selector(cellTapped:));
     if (!identifier.length) return;
-    [UIView animateWithDuration:0.10 animations:^{ gesture.view.transform = CGAffineTransformMakeScale(0.94, 0.94); } completion:^(__unused BOOL finished) {
-        [UIView animateWithDuration:0.14 animations:^{ gesture.view.transform = CGAffineTransformIdentity; }];
+    [UIView animateWithDuration:0.0 animations:^{ gesture.view.transform = CGAffineTransformMakeScale(0.94, 0.94); } completion:^(__unused BOOL finished) {
+        [UIView animateWithDuration:0.0 animations:^{ gesture.view.transform = CGAffineTransformIdentity; }];
         [[CCAsterCoordinator shared] addControlSheetDidSelectIdentifier:identifier fromSheet:self];
     }];
 }
@@ -9872,7 +9375,6 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     }
     return rect;
 }
-
 
 %end
 
@@ -9971,11 +9473,6 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     if (insideOriginal) return YES;
     if (!gEnabled) return NO;
 
-    // iOS 16 keeps the collection view's original six-row bounds even when
-    // CCAster's position provider lays modules into rows seven and eight.
-    // UIKit consequently rejects touches before they reach those visible
-    // module wrappers. Extend hit testing to the actual laid-out descendants
-    // without changing the collection frame or any grid geometry.
     UIView *collectionView = (UIView *)(id)self;
     CGRect interactiveBounds = collectionView.bounds;
     for (UIView *subview in collectionView.subviews) {
@@ -10069,13 +9566,6 @@ static void CCAAnimateDiscreteMediaLayout(UIView *view) {
     });
 }
 
-// --- Media module internals (structure learned from CC26, credit
-// therealhoodboy/CC26). The compact CC tile hosts MRUNowPlayingView with a
-// `_layout` ivar (1/2 = expanded platter layouts, skip those), containing
-// MRUNowPlayingControlsView -> _headerView (MRUNowPlayingHeaderView with
-// _artworkView, native _routingButton, _labelView) + _transportControlsView
-// (leftButton/middleButton/rightButton). ---
-
 static UIView *CCAIvarView(id object, const char *name) {
     if (!object) return nil;
     Ivar ivar = class_getInstanceVariable(object_getClass(object), name);
@@ -10091,17 +9581,11 @@ static UIView *CCAMediaAncestorOfClass(UIView *view, NSString *className) {
     return nil;
 }
 
-// YES only for media views living inside a Control Center module tile (not the
-// lock screen player) while the tile is in its collapsed `_layout`.
 static BOOL CCAMediaViewInsideControlCenterTile(UIView *view) {
     if (!gEnabled) return NO;
     UIView *container = CCAMediaAncestorOfClass(view, @"CCUIContentModuleContentContainerView");
     if (!container) return NO;
-    // Only the media module's OWN expansion hands the layout back to the
-    // system; other modules expanding must not eject the tile from its custom
-    // layout (that left it mangled in native form behind the platter). The
-    // container's stuck-prone `_expanded` flag is consulted only inside
-    // CCAster's own expansion window.
+
     if (gCCAExpandedModuleOpen) {
         BOOL mediaExpanding = [gCCAExpandedModuleIdentifier isEqualToString:@"com.apple.mediaremote.controlcenter.nowplaying"];
         if (!mediaExpanding && !gCCAExpandedModuleIdentifier.length) {
@@ -10128,8 +9612,6 @@ static NSString *CCAMediaModeForNowPlayingView(UIView *npView) {
     return columns < 4 ? @"compact" : [NSString stringWithFormat:@"wide%lu", (unsigned long)rows];
 }
 
-// Mode for any descendant of the now playing view; nil when CCAster should
-// leave the native layout alone entirely.
 static NSString *CCAActiveMediaMode(UIView *descendant) {
     UIView *npView = CCAMediaAncestorOfClass(descendant, @"MRUNowPlayingView");
     if (!npView || !CCAMediaViewInsideControlCenterTile(npView)) return nil;
@@ -10151,26 +9633,16 @@ static void CCAAdjustMediaLabelFonts(UIView *view, BOOL isTitle) {
     }
 }
 
-// The system dims/hides pieces of the compact label stack for its own layout;
-// force children visible whenever CCAster owns the geometry.
 static void CCAForceMediaSubviewAlphas(UIView *view) {
     for (UIView *subview in view.subviews) {
         if (!subview.hidden) subview.layer.opacity = 1.0;
     }
 }
 
-// Layout verified against the live iOS 16.5 hierarchy: every
-// component is a direct child of MRUNowPlayingView — _artworkView (with its
-// own placeholder system), _headerView (hosting _labelView + _routingButton),
-// _timeControlsView, _transportControlsView, _volumeControlsView. The header
-// is kept full-bleed so its children can be placed in tile coordinates; the
-// sibling control strips are fronted above it for touch priority.
 static void CCAConfigureNowPlayingLayout(UIView *nowPlayingView) {
     if (!nowPlayingView) return;
     if (!CCAMediaViewInsideControlCenterTile(nowPlayingView)) {
-        // Leaving CCAster's tile modes (expansion, platter handoff): drop the
-        // stored mode and give the wrapper its corner chrome back so the
-        // native expanded layout isn't missing pieces.
+
         if (objc_getAssociatedObject(nowPlayingView, kCCANowPlayingLayoutModeKey)) {
             objc_setAssociatedObject(nowPlayingView, kCCANowPlayingLayoutModeKey, nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
             UIView *wrapper = CCAMediaAncestorOfClass(nowPlayingView, @"MRUControlCenterView");
@@ -10178,10 +9650,7 @@ static void CCAConfigureNowPlayingLayout(UIView *nowPlayingView) {
             UIView *cornerMore = CCAIvarView(wrapper, "_moreButton");
             if (cornerRouting) { cornerRouting.hidden = NO; cornerRouting.alpha = 1.0; }
             if (cornerMore) { cornerMore.hidden = NO; cornerMore.alpha = 1.0; }
-            // The expanded platter reuses these exact subviews (_layout flip),
-            // so every tile-mode override must be handed back to the system:
-            // forced hidden/alpha on time & volume strips, the hidden rewind
-            // button, the header play/pause button, and artwork styling.
+
             UIView *artwork = CCAIvarView(nowPlayingView, "_artworkView");
             UIView *header = CCAIvarView(nowPlayingView, "_headerView");
             UIView *time = CCAIvarView(nowPlayingView, "_timeControlsView");
@@ -10236,9 +9705,7 @@ static void CCAConfigureNowPlayingLayout(UIView *nowPlayingView) {
     [UIView performWithoutAnimation:^{
         nowPlayingView.clipsToBounds = YES;
         header.frame = nowPlayingView.bounds;
-        // The MRUControlCenterView wrapper draws its own corner routing
-        // indicator and "more" button; CCAster's header routing button is the
-        // sole routing control in every custom layout.
+
         UIView *wrapper = CCAMediaAncestorOfClass(nowPlayingView, @"MRUControlCenterView");
         UIView *cornerRouting = CCAIvarView(wrapper, "_routingButton");
         UIView *cornerMore = CCAIvarView(wrapper, "_moreButton");
@@ -10273,9 +9740,7 @@ static void CCAConfigureNowPlayingLayout(UIView *nowPlayingView) {
             artwork.hidden = NO;
             artwork.alpha = 1.0;
             artwork.layer.opacity = 1.0;
-            // Blank rounded placeholder with a light shade when nothing is
-            // playing; MRUArtworkView's own placeholder draws on top when the
-            // system provides one.
+
             artwork.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.12];
             artwork.layer.cornerRadius = CGRectGetWidth(artworkFrame) * 0.22;
             artwork.layer.cornerCurve = kCACornerCurveContinuous;
@@ -10386,12 +9851,7 @@ static void CCAOpenPendingConnectivityDetailFromPresentation(UIPresentationContr
     NSString *identifier = gCCAConnectivityPendingDetailIdentifier.copy;
     gCCAConnectivityPendingDetailIdentifier = nil;
     if (!identifier.length || !presentationController.presentedViewController) return;
-    // The per-toggle menu returned by Apple's connectivity child is only the
-    // content controller. The private click presentation interaction normally
-    // wraps it in a CCUI detail container. Presenting it manually makes the
-    // list fill the screen and leaves the first-level platter visible behind
-    // it, so keep this path as a no-op fallback and let the native detail
-    // selector hooks service real pressure interactions directly.
+
     (void)presentationController;
 }
 
@@ -10454,11 +9914,6 @@ static void CCARestoreSuppressedMaterialsInTree(UIView *root) {
     }
 }
 
-// Watchdog: the connectivity expansion choreography (snapshot window, hidden
-// live platter, suppressed materials) assumes the six-card platter completes
-// its reveal. Detail expansions that merely route THROUGH the connectivity
-// module (the Wi-Fi list) can strand that state, which then hides every later
-// platter until respring. Reset everything whenever no expansion is open.
 static void CCAResetConnectivityExpansionState(UIViewController *overlay) {
     gCCAConnectivityExpansionActive = NO;
     gCCAConnectivityProxyExpansionActive = NO;
@@ -10614,9 +10069,7 @@ static CCAConnectivityCompactMetrics CCAConnectivityCompactMetricsForBounds(CGRe
 }
 
 static CCAConnectivityExpandedMetrics CCAConnectivityMetricsForWidth(CGFloat width) {
-    // All expanded geometry is derived from the actual presentation width.
-    // The ratios follow the later Control Center platter while preserving true
-    // squares and equal icon inset on every supported screen size.
+
     CGFloat inset = MAX(12.0, round(width * 0.05));
     CGFloat gap = MAX(8.0, round(width * 0.031));
     CGFloat contentWidth = MAX(1.0, width - inset * 2.0);
@@ -10720,10 +10173,7 @@ static void CCAStyleExpandedConnectivityChild(UIViewController *child, UIView *c
         roundButton.frame = CGRectMake(iconInset, iconInset, iconSide, iconSide);
         objc_setAssociatedObject(roundButton, kCCAConnectivityExpandedCardKey, card, OBJC_ASSOCIATION_ASSIGN);
         objc_setAssociatedObject(roundButton, kCCAConnectivityExpandedSurfaceKey, child.view, OBJC_ASSOCIATION_ASSIGN);
-        // The system reuses these button instances when connectivity moves
-        // between its compact and expanded controllers. Mark only the four
-        // square-grid controls, and apply/reset the glyph transform at the same
-        // moment as the expanded geometry so it cannot leak into compact mode.
+
         objc_setAssociatedObject(roundButton, kCCAConnectivityExpandedGridGlyphKey,
                                  wide ? nil : @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         for (UIView *glyph in CCACompactGlyphHosts(roundButton)) {
@@ -10916,10 +10366,6 @@ static void CCAConfigureConnectivityLayout(UIViewController *controller) {
         return;
     }
 
-    // Expanded card backings live inside the connectivity scroll view. They
-    // must be hidden explicitly when the same controller collapses back into
-    // its 2x2 module; otherwise the wide/square cards remain visible behind
-    // the compact controls until the controller is recreated.
     CCAResetConnectivityCompactTransforms(controller);
     for (NSInteger tag = kCCAConnectivityExpandedCardBaseTag; tag < kCCAConnectivityExpandedCardBaseTag + 6; tag++) {
         UIView *card = [root viewWithTag:tag];
@@ -11064,11 +10510,6 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
 
 %end
 
-// Per-class media layout (structure ported from CC26). Each private view
-// re-lays its own children after its parent, so geometry must be reasserted
-// at every level; translatesAutoresizingMaskIntoConstraints = YES keeps the
-// frames from being reclaimed by autolayout.
-
 %hook MRUNowPlayingHeaderView
 
 - (void)layoutSubviews {
@@ -11076,9 +10517,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
     UIView *view = (UIView *)(id)self;
     NSString *mode = CCAActiveMediaMode(view);
     if (!mode) return;
-    // The header is kept full-bleed by CCAConfigureNowPlayingLayout, so these
-    // child frames are tile coordinates. Artwork is NOT in the header on this
-    // iOS — it's a sibling handled at the now-playing-view level.
+
     UIView *routing = CCAIvarView(self, "_routingButton");
     UIView *label = CCAIvarView(self, "_labelView");
     UIView *headerTransport = CCAIvarView(self, "_transportButton");
@@ -11105,8 +10544,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
             routingFrame = CGRectMake(W - routingSide - 11.0, 14.0, routingSide, routingSide);
             labelFrame = CGRectMake(11.0, 62.0, W - 22.0, 34.0);
         }
-        // The header's inline play/pause button overlaps our routing spot in
-        // some native states; the transport strip owns playback controls.
+
         if (headerTransport) {
             headerTransport.hidden = YES;
             headerTransport.alpha = 0.0;
@@ -11119,9 +10557,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
             routing.backgroundColor = [UIColor colorWithWhite:0.8 alpha:0.25];
             routing.layer.cornerRadius = routingSide / 2.0;
             routing.layer.masksToBounds = YES;
-            // Solid white output glyph. The shrink happens in the
-            // MRUTransportButton layout hook (marked below) because the button
-            // re-lays its image view after this header pass.
+
             routing.tintColor = UIColor.whiteColor;
             objc_setAssociatedObject(routing, kCCAMediaRouteGlyphShrinkKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             for (UIView *routingChild in routing.subviews) {
@@ -11169,7 +10605,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
     UIView *routeLabel = CCAIvarView(self, "_routeLabel");
     if (routeLabel) routeLabel.hidden = YES;
     if (placeholderView && !placeholderView.hidden) {
-        // "Not Playing" placeholder: center it in the label view's bounds.
+        
         [UIView performWithoutAnimation:^{
             placeholderView.translatesAutoresizingMaskIntoConstraints = YES;
             placeholderView.frame = CGRectMake(0.0, (CGRectGetHeight(view.bounds) - 18.0) / 2.0, CGRectGetWidth(view.bounds), 18.0);
@@ -11199,7 +10635,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
         CCAAdjustMediaLabelFonts(titleView, YES);
         CCAAdjustMediaLabelFonts(subtitleView, NO);
     }];
-    // The system re-dims these asynchronously after layout; force once more.
+    
     dispatch_async(dispatch_get_main_queue(), ^{
         if (!CCAActiveMediaMode(view)) return;
         view.layer.opacity = 1.0;
@@ -11235,8 +10671,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
     if (![objc_getAssociatedObject(self, kCCAMediaRouteGlyphShrinkKey) boolValue]) return;
     UIView *view = (UIView *)(id)self;
     if (!CCAActiveMediaMode(view)) return;
-    // CCAster's circled routing button: pull the glyph in so it doesn't crowd
-    // the circle. Runs after the button's own image layout, so it sticks.
+
     [UIView performWithoutAnimation:^{
         for (UIView *child in view.subviews) {
             if (![child isKindOfClass:[UIImageView class]]) continue;
@@ -11266,13 +10701,10 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
     CGFloat W = CGRectGetWidth(view.bounds);
     CGFloat centerY = CGRectGetHeight(view.bounds) / 2.0;
     [UIView performWithoutAnimation:^{
-        // The header's routing button is the one CCAster styles and places;
-        // the transport strip's trailing duplicate stays hidden. Same for the
-        // leading (TV remote style) button.
+
         if (stripRouting) { stripRouting.hidden = YES; stripRouting.alpha = 0.0; }
         if (leadingButton) { leadingButton.hidden = YES; leadingButton.alpha = 0.0; }
-        // The 4x1 strip only fits play + skip-forward (reference design);
-        // every other mode centers the full three-button cluster.
+
         BOOL strip = [mode isEqualToString:@"wide1"];
         leftButton.hidden = strip;
         leftButton.alpha = strip ? 0.0 : 1.0;
@@ -11305,9 +10737,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
     %orig;
     UIViewController *controller = (UIViewController *)(id)self;
     CCAConfigureConnectivityLayout(controller);
-    // Several of the child connectivity controllers finish their own layout
-    // after the parent callback. Coalesce one next-turn correction so their
-    // stock frames cannot overwrite the compact cluster.
+
     static const void *kCCAConnectivityDeferredLayoutKey = &kCCAConnectivityDeferredLayoutKey;
     BOOL compact = CGRectGetWidth(controller.view.bounds) < 190.0 && CGRectGetHeight(controller.view.bounds) < 190.0 && !gCCAExpandedModuleOpen;
     if (compact && ![objc_getAssociatedObject(controller, kCCAConnectivityDeferredLayoutKey) boolValue]) {
@@ -11577,8 +11007,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
     UIView *packageView = (UIView *)(id)self;
     UIView *buttonView = packageView;
     while (buttonView && ![NSStringFromClass(buttonView.class) isEqualToString:@"CCUIButtonModuleView"]) buttonView = buttonView.superview;
-    // The glyph is invariant while the resize border follows the finger. Do
-    // not let package layout reposition nested artwork during the preview.
+
     BOOL keepsLeadingAnchor = [buttonView viewWithTag:kCCAResizePresentationTag] || [objc_getAssociatedObject(buttonView, kCCAResizePreviewKey) boolValue];
     if (!buttonView || !keepsLeadingAnchor) return;
     if (CGRectGetWidth(packageView.bounds) <= 80.0 && CGRectGetHeight(packageView.bounds) <= 80.0 && packageView.superview) {
@@ -11602,16 +11031,12 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
     }
     for (UIView *content in packageView.subviews) {
         if (CGRectGetWidth(content.bounds) <= 60.0 && CGRectGetHeight(content.bounds) <= 60.0) {
-            // Pin by visual center rather than intrinsic artwork size. Shortcut
-            // modules such as Calculator use a smaller, nested package glyph;
-            // a fixed origin therefore did not line up with Timer/toggles.
+
             [UIView performWithoutAnimation:^{
                 [CATransaction begin];
                 [CATransaction setDisableActions:YES];
                 if (gCCAResizeInProgress) {
-                    // UIKit lays out the package again during the native size
-                    // transition. Remove only geometric interpolation so the
-                    // package's own symbol/state animation remains available.
+
                     [content.layer removeAnimationForKey:@"position"];
                     [content.layer removeAnimationForKey:@"bounds"];
                     [content.layer removeAnimationForKey:@"transform"];
@@ -11651,9 +11076,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
 
 - (void)layoutSubviews {
     %orig;
-    // resizePanned: applies the presentation exactly when the logical size
-    // crosses a valid endpoint. Re-entering it for every intermediate layout
-    // pass produces duplicate fades and visible flashing.
+
     UIResponder *responder = (UIResponder *)(id)self;
     UIViewController *module = nil;
     while (responder) {
@@ -11678,9 +11101,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
 - (void)viewDidLayoutSubviews {
     %orig;
     if (gEnabled && CCAIsOverlayController(self) && gCCAControlCenterPresented) {
-        // Provider-driven rebuilds replace the header pocket at unpredictable
-        // times; the overlay always lays out afterwards, so this is the one
-        // reliable spot to put the quick-access host back.
+
         CCAsterCoordinator *coordinator = [CCAsterCoordinator shared];
         [coordinator installQuickAccessHostOnOverlay:self];
         BOOL hasPageIndicators = [self.view viewWithTag:kCCAPageIndicatorHostTag] != nil;
@@ -11691,9 +11112,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
                 break;
             }
         }
-        // installPagingOnOverlay performs a complete grid normalization and
-        // presentation reconcile. Re-running it for every native presentation
-        // layout pass restarts compositor work at the end of open/close.
+
         if (!hasPageIndicators || !hasPager) {
             [coordinator installPagingOnOverlay:self];
         }
@@ -11734,10 +11153,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
             if (overlay) [coordinator setNativeDismissTapGesturesEnabled:NO forOverlay:overlay];
         }
     }
-    // Connectivity's leaf controllers are reparented and laid out separately
-    // by the stock expansion animator. Keep every live leaf suppressed while
-    // our atomic pane snapshots own the transition; otherwise UIKit can expose
-    // labels and glyphs outside their card backgrounds for a single frame.
+
     if (gEnabled && gCCAConnectivityTransitionWindow && gCCAConnectivityExpansionActive &&
         !gCCAConnectivitySnapshotCaptureActive && CCAIsConnectivityTransitionLeafController(self)) {
         [UIView performWithoutAnimation:^{
@@ -11755,9 +11171,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
         if (gEditModeActive) {
             [[CCAsterCoordinator shared] dismissEditingImmediately];
         } else if (gEnabled) {
-            // Insurance: if a raced exit left edit presentation half-applied
-            // (offset wrappers, borders, grids), scrub it while CC is away so
-            // the next open and module expansions start from clean geometry.
+
             [[CCAsterCoordinator shared] setEditPresentation:NO forOverlay:self animated:NO];
         }
     }
@@ -11795,10 +11209,6 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
 
 %hook SBControlCenterController
 
-// Two-stage exit while editing: the first home button press (or home gesture
-// dismissal request on notched devices) leaves edit mode and keeps Control
-// Center presented; only the next one actually dismisses. Both funnel through
-// these seams, and tapping anywhere else can no longer end editing.
 - (BOOL)handleHomeButtonPress {
     if (gEnabled && gCCAControlCenterPresented && !gCCAExpandedModuleOpen) {
         if (gEditModeActive) {
@@ -11817,9 +11227,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
         if (gEditModeActive) {
             CCAHaptic();
             gCCAEditExitConsumedUntil = CACurrentMediaTime() + 0.9;
-            // Atomic, non-animated exit: the in-flight home gesture keeps
-            // driving presentation callbacks that would strand an animated
-            // exit halfway (stuck edit chrome, later expansion glitches).
+
             [[CCAsterCoordinator shared] dismissEditingImmediately];
             return;
         }
@@ -11840,9 +11248,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
         %orig;
         return;
     }
-    // Once the touch reaches the pager, the coordinator force-finishes the
-    // native reveal and owns the remaining drag. Letting SpringBoard continue
-    // its interactive stretch would overwrite our scale on every callback.
+
     BOOL pagerOwnsGesture = gPagingEnabled && (gCCAPresentationNativeSettlePending || gCCAPresentationPageHandoffActive);
     if (!pagerOwnsGesture) %orig;
     UIViewController *overlay = nil;
@@ -11870,8 +11276,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
     if (overlay && CCAInteractivePagingGeometryActive()) {
         [[CCAsterCoordinator shared] applyPageTransformToOverlay:overlay animated:NO];
     }
-    // A presentation dip mid-drag is a second-finger page (or an incidental
-    // native callback), not an intent to leave edit mode with a module in hand.
+
     if (gEnabled && gEditModeActive && !gCCAExpandedModuleOpen && !gCCADragInProgress && clamped < 0.985) {
         CCAHaptic();
         gCCAEditExitConsumedUntil = CACurrentMediaTime() + 1.1;
@@ -11895,8 +11300,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
         pageIndicators.alpha = clamped;
     }
     if (!host || gCCAExpandedModuleOpen || gEditModeActive || !gEnabled || !gQuickAccessButtonsEnabled) return;
-    // Presentation state remains nonzero throughout dismissal. Follow the
-    // actual interactive progress so this chrome leaves with Control Center.
+
     [host.layer removeAllAnimations];
     objc_setAssociatedObject(host, kCCAQuickAccessAnimationTokenKey, [NSObject new], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     host.hidden = clamped <= 0.001;
@@ -11920,12 +11324,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
             return;
         }
     }
-    // SpringBoard's own -[SBControlCenterController _willPresent] is reached
-    // through this %orig. If our paged layout ever hands it an inconsistent
-    // state it throws, and an uncaught throw here takes down SpringBoard (the
-    // observed crash). Contain it: a single bad presentation is downgraded to a
-    // cosmetic glitch, the exception reason is recorded for field diagnosis, and
-    // the layout is re-sanitised so the following present starts clean.
+
     @try {
         %orig;
     } @catch (NSException *presentationException) {
@@ -11963,10 +11362,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
             UIPanGestureRecognizer *presentationPan = gCCAPresentationPanGesture;
             BOOL livePresentationPull = presentationPan && presentationPan.numberOfTouches > 0 &&
                 (presentationPan.state == UIGestureRecognizerStateBegan || presentationPan.state == UIGestureRecognizerStateChanged);
-            // didChangePresentationState can arrive in the middle of the
-            // opening pull. Resetting these flags here used to cancel a valid
-            // handoff based on callback timing, producing the intermittent
-            // "works after manually scrubbing" behavior.
+
             if (!livePresentationPull && !gCCAPresentationNativeSettlePending && !gCCAPresentationPageHandoffActive) {
                 gCCAPresentationReleasedWhileSettling = NO;
                 gCCAPresentationHandoffArmed = NO;
@@ -11977,10 +11373,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
             }
         }
         if (state == 0 && gPagingEnabled && gCCAPageCount > 1) {
-            // A Control Center presentation is a fresh paging session. Reset
-            // while the overlay is offscreen so the next pull always starts
-            // on page one, matching iOS 18 and avoiding a pull-to-scrub
-            // handoff inheriting the previous session's page transform.
+
             gCCAPagerTransitionActive = NO;
             gCCAPagerInteractiveTranslation = 0.0;
             gCCAPagerInteractiveProgress = 0.0;
@@ -12010,17 +11403,14 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
         [[CCAsterCoordinator shared] updateTopFadeForOverlay:overlay presentationAlpha:state == 0 ? 0.0 : 1.0];
         [[CCAsterCoordinator shared] animateOwnedDuplicateHostForOverlay:overlay presented:state != 0];
         if (state != 0 && !gCCAExpandedModuleOpen) {
-            // The source presentation layers already exist when this callback
-            // returns. Copy them now so the first committed duplicate frame
-            // cannot flash at its resting transform before the display link
-            // begins following the native animation.
+
             [[CCAsterCoordinator shared] layoutOwnedDuplicateModulesForOverlay:overlay];
             [[CCAsterCoordinator shared] updateOwnedDuplicateHostForOverlay:overlay presentationAlpha:1.0];
         }
         if (gEditModeActive) {
             CGFloat chromeProgress = state == 0 ? 0.0 : 1.0;
             if (state == 0) {
-                [UIView animateWithDuration:0.16 delay:0.0 options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
+                [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState animations:^{
                     [[CCAsterCoordinator shared] updateEditingChromeForPresentationProgress:chromeProgress overlay:overlay];
                 } completion:nil];
             } else {
@@ -12064,9 +11454,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
             });
         }
     }
-    // CCUI presentation state zero is fully dismissed.  The modular overlay
-    // remains in SpringBoard's view hierarchy, so UIViewController appearance
-    // callbacks are not reliable enough to remove overlay-hosted edit chrome.
+
     if (state == 0 && gEditModeActive) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.18 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             if (gEditModeActive) [[CCAsterCoordinator shared] dismissEditingImmediately];
@@ -12149,7 +11537,7 @@ static void CCAConfigureExpandedConnectivityChild(UIViewController *child) {
             CCACompleteGenericExpansionDismissalIfReady();
         }];
     } else if (usesGenericTransition) {
-        [UIView animateWithDuration:0.2 animations:^{
+        [UIView animateWithDuration:0.0 animations:^{
             expandedSnapshot.alpha = 0.0;
             compactSnapshot.alpha = 1.0;
             compactSnapshot.frame = gCCAExpansionCompactDestinationWindowFrame;
@@ -12203,8 +11591,7 @@ static void CCASuppressConnectivityOuterMaterial(UIPresentationController *prese
         BOOL platterSized = fabs(CGRectGetWidth(converted) - CGRectGetWidth(presentedView.bounds)) <= 8.0 &&
                             fabs(CGRectGetHeight(converted) - CGRectGetHeight(presentedView.bounds)) <= 8.0;
         BOOL belongsToCustomContent = candidate == contentView || [candidate isDescendantOfView:contentView];
-        // Our six cards are deliberately smaller than the presentation host;
-        // only the stock full-platter material is suppressed.
+
         if (effectSurface && platterSized && !belongsToCustomContent && !objc_getAssociatedObject(candidate, kCCAConnectivitySuppressedSurfaceKey)) {
             objc_setAssociatedObject(candidate, kCCAConnectivitySuppressedSurfaceKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             candidate.alpha = 0.0;
@@ -12236,10 +11623,7 @@ static void CCASuppressConnectivityStockContainerMaterial(UIView *contentContain
                         [name containsString:@"Material"] || [name containsString:@"Backdrop"];
         if (material && !CCAConnectivityViewLivesInsideCustomCard(candidate, contentContainer)) {
             CGRect frame = [candidate convertRect:candidate.bounds toView:contentContainer];
-            // The stock platter backing is the only material that occupies most
-            // of the presentation container. During UIKit's reparenting pass it
-            // briefly takes on crossed/stretched geometry, so suppress it by
-            // coverage rather than by a device-specific frame or class name.
+
             BOOL outerBacking = CGRectGetWidth(frame) >= containerWidth * 0.68 &&
                                 CGRectGetHeight(frame) >= containerHeight * 0.68;
             if (outerBacking) {
@@ -12261,10 +11645,7 @@ static void CCAConfigureConnectivityPresentationContainer(UIPresentationControll
         gCCAConnectivityExpansionActive && !gCCAConnectivityClosingTransitionActive &&
         !gCCAConnectivitySnapshotCaptureActive;
     if (transitionOwnsVisibility) {
-        // Suppressing only the connectivity child is too late: Apple's detail
-        // presentation briefly draws duplicated labels and toggles in wrapper
-        // views while it reparents them. Keep the entire presented pane out of
-        // the render tree until our settled composite is ready.
+
         UIView *presentedSurface = presentationController.presentedView;
         [UIView performWithoutAnimation:^{
             [presentedSurface.layer removeAllAnimations];
@@ -12283,10 +11664,7 @@ static void CCAConfigureConnectivityPresentationContainer(UIPresentationControll
     UIEdgeInsets safeInsets = presentedRoot.window.safeAreaInsets;
     CGFloat availableHeight = CGRectGetHeight(presentedRoot.bounds) - safeInsets.top - safeInsets.bottom - 32.0;
     CGFloat height = MIN(metrics.contentHeight, availableHeight);
-    // UIKit's iOS 16 detail presentation is shorter than our rebuilt platter.
-    // Remove clipping from the presentation chain before changing the content
-    // frame, otherwise the first committed frame briefly cuts the VPN/bottom
-    // bar off at the stock expanded height.
+
     presentationController.containerView.clipsToBounds = NO;
     presentationController.containerView.layer.masksToBounds = NO;
     for (UIView *ancestor = contentContainer; ancestor; ancestor = ancestor.superview) {
@@ -12317,15 +11695,11 @@ static void CCAConfigureConnectivityPresentationContainer(UIPresentationControll
     }
     if (connectivity) {
         if (connectivity.view == gCCAConnectivityDetachedLiveView) {
-            // During the opening blend the real content is deliberately
-            // hosted at final screen coordinates. Do not let a presentation
-            // layout pass put it back into content-container coordinates.
+
             return;
         }
         if (transitionOwnsVisibility) {
-            // The expanded presentation may own a different connectivity
-            // controller than the compact module. Hide this instance before
-            // UIKit gets a chance to animate any of its children onscreen.
+
             [connectivity.view.layer removeAnimationForKey:@"opacity"];
             connectivity.view.layer.opacity = 0.0;
             connectivity.view.alpha = 0.0;
@@ -12336,9 +11710,7 @@ static void CCAConfigureConnectivityPresentationContainer(UIPresentationControll
         CCAConfigureConnectivityLayout(connectivity);
         [connectivity.view setNeedsLayout];
         [connectivity.view layoutIfNeeded];
-        // Child labeled buttons finish their own layout after the parent.  A
-        // final explicit pass ensures the transition snapshot never captures
-        // the blank/intermediate card geometry used by UIKit's animator.
+
         CCAConfigureConnectivityLayout(connectivity);
         if (transitionOwnsVisibility) {
             [connectivity.view.layer removeAnimationForKey:@"opacity"];
@@ -12347,20 +11719,13 @@ static void CCAConfigureConnectivityPresentationContainer(UIPresentationControll
             connectivity.view.hidden = YES;
         }
     }
-    // A late native layout can recreate or resize the stock material after the
-    // first suppression pass. Reassert after the final connectivity layout.
+
     CCASuppressConnectivityStockContainerMaterial(contentContainer);
 }
 
 static UIView *CCAConnectivityStaticSnapshot(UIView *view, BOOL afterScreenUpdates) {
     if (!view || CGRectGetWidth(view.bounds) < 1.0 || CGRectGetHeight(view.bounds) < 1.0) return nil;
-    // This must be a true still image. snapshotViewAfterScreenUpdates: keeps a
-    // live replica of the source layers; connectivity reparents those layers
-    // during expansion, which made the frozen compact module mutate into the
-    // expanded card geometry. Compact and settled-closing content has already
-    // rendered. Compact content uses a no-flush bitmap so it cannot mutate
-    // during UIKit's reparenting; the already-settled expanded hierarchy uses
-    // a flush so MTMaterial/backdrop layers are included in the bitmap.
+
     UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat defaultFormat];
     format.opaque = NO;
     format.scale = UIScreen.mainScreen.scale;
@@ -12471,10 +11836,7 @@ static void CCARemoveConnectivityTransitionVisuals(BOOL restoreLiveView) {
 
 static UIView *CCAConnectivityTransitionHostForWindow(UIWindow *window) {
     if (!window) return nil;
-    // UIKit may move the expanded platter into a temporary window and destroy
-    // that window before our closing animation completes. Use a short-lived,
-    // noninteractive compositor window above both hierarchies so one atomic
-    // transition survives the complete open/close handoff.
+
     if (gCCAConnectivityTransitionHost.superview) {
         gCCAConnectivityTransitionWindow.windowLevel = MAX(gCCAConnectivityTransitionWindow.windowLevel,
                                                             window.windowLevel + 100.0);
@@ -12622,9 +11984,7 @@ static void CCABeginConnectivityOpeningTransition(UIViewController *controller) 
     gCCAConnectivityTransitionController = controller;
     gCCAConnectivityCompactController = controller;
     UIWindow *window = controller.view.window;
-    // Remember the persistent Control Center window. The expanded platter can
-    // be moved to a short-lived presentation window; hosting the return there
-    // made the animation disappear whenever UIKit tore that window down first.
+
     gCCAConnectivityCompactWindow = window;
     UIView *host = CCAConnectivityTransitionHostForWindow(window);
     UIView *sourceView = (gCCAConnectivityHasProxySourceFrame && gCCAConnectivityProxySourceView.window) ? gCCAConnectivityProxySourceView : controller.view;
@@ -12677,9 +12037,6 @@ static void CCAStartConnectivityOpeningReveal(UIPresentationController *presenta
         return;
     }
 
-    // Let the final expanded hierarchy settle invisibly, then flatten it once.
-    // Animating this stable image prevents UIKit's child controllers from
-    // reintroducing their stock fly-out animations midway through our blend.
     gCCAConnectivitySnapshotCaptureActive = YES;
     UIView *presentedSurface = presentationController.presentedView;
     [UIView performWithoutAnimation:^{
@@ -12699,11 +12056,7 @@ static void CCAStartConnectivityOpeningReveal(UIPresentationController *presenta
 
     CGSize finalSize = controller.view.bounds.size;
     CGRect screenBounds = UIScreen.mainScreen.bounds;
-    // convertRect: includes the presentation ancestor's in-flight transform at
-    // this point and therefore reports a compact-origin frame. The expanded
-    // platter is centered by its presentation controller; derive that final
-    // frame directly from its settled bounds so the temporary host is immune
-    // to the native transition's current progress on every screen size.
+
     CGRect finalScreenFrame = CGRectMake(round((CGRectGetWidth(screenBounds) - finalSize.width) * 0.5),
                                          round((CGRectGetHeight(screenBounds) - finalSize.height) * 0.5),
                                          finalSize.width,
@@ -12732,9 +12085,6 @@ static void CCAStartConnectivityOpeningReveal(UIPresentationController *presenta
     }];
     CCASuppressConnectivityLiveChildren(controller);
 
-    // Compact and expanded connectivity are each flattened into one complete
-    // pane. Their cards, labels, and glyphs therefore cannot separate or fly on
-    // independent native child animations during the handoff.
     NSTimeInterval duration = MIN(0.70, MAX(0.64, CCAConnectivityTransitionDuration(presented) + 0.24));
     [UIView animateKeyframesWithDuration:duration delay:0.0
                                 options:UIViewKeyframeAnimationOptionCalculationModeCubic | UIViewAnimationOptionCurveEaseInOut |
@@ -12794,10 +12144,7 @@ static void CCABeginConnectivityClosingTransition(UIPresentationController *pres
     UIWindow *window = gCCAConnectivityCompactWindow ?: controller.view.window;
     UIView *host = CCAConnectivityTransitionHostForWindow(window);
     gCCAConnectivitySnapshotCaptureActive = YES;
-    // Capture the fully composited pixels of each custom card from the source
-    // window. MTMaterial/backdrop layers do not reliably render when the
-    // controller alone is flattened; card crops keep every background, label,
-    // and glyph together under one parent transform.
+
     UIView *snapshot = CCAConnectivityExpandedCompositeSnapshot(controller, host);
     if (!snapshot) snapshot = CCAConnectivityStaticSnapshot(controller.view, YES);
     gCCAConnectivitySnapshotCaptureActive = NO;
@@ -12848,8 +12195,7 @@ static void CCABeginConnectivityClosingTransition(UIPresentationController *pres
                              animations:^{
         [UIView addKeyframeWithRelativeStartTime:0.0 relativeDuration:0.58 animations:^{
             snapshot.alpha = 0.0;
-            // The expanded menu lifts very slightly as it fades, matching the
-            // later Control Center transition instead of sinking downward.
+
             snapshot.transform = CGAffineTransformMakeTranslation(0.0, -10.0);
         }];
         [UIView addKeyframeWithRelativeStartTime:0.08 relativeDuration:0.24 animations:^{
@@ -12865,9 +12211,7 @@ static void CCABeginConnectivityClosingTransition(UIPresentationController *pres
         }];
     } completion:^(__unused BOOL finished) {
         if (generation != gCCAConnectivityTransitionGeneration) return;
-        // didCloseExpandedModule performs the compact handoff.  Keep the
-        // transparent transition host alive until then so UIKit's reused child
-        // hierarchy never becomes visible in its intermediate frames.
+
     }];
 }
 
@@ -12900,13 +12244,10 @@ static void CCAFinishConnectivityClosingTransition(UIViewController *controller)
         target.view.alpha = 1.0;
         target.view.layer.opacity = 1.0;
     }];
-    // Keep the populated compact still above the restored live module for a
-    // few frames. This masks the final UIKit child reparent/layout pass and
-    // turns the previous blank-frame -> full-opacity snap into a real handoff
-    // between two identical populated states.
+
     UIView *compactSnapshot = gCCAConnectivityCompactTransitionSnapshot;
     if (compactSnapshot) {
-        [UIView animateWithDuration:0.16 delay:0.02
+        [UIView animateWithDuration:0.0 delay:0.02
                             options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState
                          animations:^{ compactSnapshot.alpha = 0.0; }
                          completion:^(__unused BOOL finished) {
@@ -12944,13 +12285,10 @@ static void CCAApplyExpandedPlatterRadius(UIPresentationController *presentation
         if (![target isKindOfClass:[UIView class]]) continue;
         target.layer.cornerRadius = radius;
         target.layer.cornerCurve = kCACornerCurveContinuous;
-        // Expanded connectivity and menu content intentionally reaches beyond
-        // intermediate controller bounds. Never clip those presentation hosts.
+
         target.layer.masksToBounds = NO;
     }
 
-    // Round only matching material surfaces; these own the visible platter
-    // fill and can safely mask their own effect without clipping child content.
     NSMutableArray<UIView *> *queue = [NSMutableArray array];
     if (contentView) [queue addObjectsFromArray:contentView.subviews];
     while (queue.count) {
@@ -13005,8 +12343,7 @@ static void CCAApplyExpandedPlatterRadius(UIPresentationController *presentation
 }
 
 - (void)dismissalTransitionWillBegin {
-    // Set the final continuous radius before UIKit captures the first collapse
-    // frame; applying it only during layout caused the visible radius snap.
+
     CCAPrepareOverlayChromeForExpandedDismissal(gOverlayControllers.allObjects.firstObject);
     CCAApplyExpandedPlatterRadius((UIPresentationController *)(id)self);
     %orig;
@@ -13014,7 +12351,6 @@ static void CCAApplyExpandedPlatterRadius(UIPresentationController *presentation
 }
 
 %end
-
 
 %hook CCUIContentModuleContainerPresentationController
 
@@ -13031,8 +12367,7 @@ static void CCAApplyExpandedPlatterRadius(UIPresentationController *presentation
 - (void)presentationTransitionWillBegin {
     UIPresentationController *presentation = (UIPresentationController *)(id)self;
     CCAApplyExpansionPageGeometrySync(gOverlayControllers.allObjects.firstObject);
-    // Preflight the custom height/masks before Apple's animator captures its
-    // initial frame, then reassert after it installs the transition hierarchy.
+
     CCAConfigureConnectivityPresentationContainer(presentation);
     %orig;
     CCAConfigureConnectivityPresentationContainer(presentation);
@@ -13042,10 +12377,7 @@ static void CCAApplyExpandedPlatterRadius(UIPresentationController *presentation
     %orig;
     UIPresentationController *presentation = (UIPresentationController *)(id)self;
     if (!completed || !gCCAConnectivityExpansionActive || gCCAConnectivityOpeningRevealStarted) return;
-    // Apple's child controllers do not reach their final model frames until
-    // the native presentation completes. Capturing earlier simply freezes the
-    // fly-out geometry. Build our flattened card pane only from this settled
-    // hierarchy, while the compact still continues to cover the native UI.
+
     CCAConfigureConnectivityPresentationContainer(presentation);
     CCAApplyExpandedPlatterRadius(presentation);
     if (gCCAConnectivityProxyExpansionActive) {
@@ -13109,7 +12441,6 @@ static UIViewController *CCACompactMediaModuleForSource(UIViewController *overla
         ![CCAModuleIdentifier(module) isEqualToString:@"com.apple.mediaremote.controlcenter.nowplaying"]) return nil;
     return module;
 }
-
 
 static void CCADiscardCompactMediaTransitionSnapshot(void) {
     [gCCAMediaCompactTransitionSnapshot.layer removeAllAnimations];
@@ -13297,7 +12628,7 @@ static void CCAFadeExpandedMediaDismissalSnapshot(void) {
     UIView *expandedSnapshot = gCCAMediaExpandedTransitionSnapshot;
     UIView *compactSnapshot = gCCAMediaCompactTransitionSnapshot;
     if (!expandedSnapshot && !compactSnapshot) return;
-    [UIView animateWithDuration:0.13 delay:0.0
+    [UIView animateWithDuration:0.0 delay:0.0
                         options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState
                      animations:^{
         expandedSnapshot.alpha = 0.0;
@@ -13389,10 +12720,8 @@ static void CCARestoreCompactMediaLayout(UIViewController *overlay, id sourceObj
             module.view.alpha = 1.0;
             module.view.layer.opacity = 1.0;
         }];
-        // MediaRemote finishes rebuilding several compact-only material and
-        // control layers just after the container lands. Keep the already
-        // landed compact proxy above it for two turns, then hand off in place.
-        [UIView animateWithDuration:0.14 delay:0.08
+
+        [UIView animateWithDuration:0.0 delay:0.08
                             options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState
                          animations:^{
             snapshot.alpha = 0.0;
@@ -13417,8 +12746,7 @@ static void CCARestoreCompactMediaLayout(UIViewController *overlay, id sourceObj
         return;
     }
     UIViewController *overlay = (UIViewController *)(id)self;
-    // Never begin an expansion on top of stale transition state from an
-    // earlier one that didn't finish its choreography.
+
     if (!gCCAExpandedModuleOpen &&
         (gCCAConnectivityTransitionWindow || gCCAConnectivityTransitionHost ||
          gCCAConnectivityClosingTransitionActive || gCCAConnectivityExpansionActive)) {
@@ -13437,23 +12765,15 @@ static void CCARestoreCompactMediaLayout(UIViewController *overlay, id sourceObj
             CCACaptureCompactMediaTransitionSnapshot(overlay, module);
         }
     }
-    // rangeOfString on a NIL identifier returns a zeroed range whose location
-    // (0) is NOT NSNotFound — every identifier-less expansion (flashlight,
-    // brightness, media, …) was misclassified as connectivity, inheriting the
-    // six-card platter sizing (the chin) and its snapshot choreography that
-    // hides platter materials until respring.
+
     BOOL openingConnectivity = connectivity != nil ||
         (openingIdentifier.length &&
          [openingIdentifier rangeOfString:@"Connectivity" options:NSCaseInsensitiveSearch].location != NSNotFound);
     CCAApplyExpansionPageGeometrySync(overlay);
-    // Capture the settled compact hierarchy before resetting any of its proxy
-    // controls.  The still image remains fixed while UIKit reparents and moves
-    // the real child views invisibly underneath it.
+
     BOOL proxyConnectivityExpansion = openingConnectivity && gCCAConnectivityProxyExpansionActive && gCCAConnectivityHasProxySourceFrame;
     if (openingConnectivity && connectivity && !proxyConnectivityExpansion) CCABeginConnectivityOpeningTransition(connectivity);
-    // Remove the compact mini-cluster transforms before Apple's expansion
-    // transition asks the children for their new frames. UIKit otherwise lays
-    // out through the 0.44 transform and produces oversized expanded controls.
+
     if (connectivity) CCAResetConnectivityCompactTransforms(connectivity);
     gCCAConnectivityExpansionActive = openingConnectivity;
     gCCAConnectivityProxyExpansionActive = proxyConnectivityExpansion;
@@ -13503,29 +12823,20 @@ static void CCARestoreCompactMediaLayout(UIViewController *overlay, id sourceObj
             [presentation.containerView layoutIfNeeded];
             CCAConfigureConnectivityPresentationContainer(presentation);
             CCAApplyExpandedPlatterRadius(presentation);
-            // The first pass establishes the final presentation geometry. Let
-            // the child labeled controls complete another run-loop layout
-            // before capturing the reveal image.
+
             if (beginReveal) CCAStartConnectivityOpeningReveal(presentation);
 
         };
-        // The presentation controller is normally available synchronously
-        // after %orig. Suppress its stock backing before Core Animation commits
-        // the first expansion frame; the next-turn pass remains as a fallback
-        // for the occasional lazily-created presentation hierarchy.
+
         applyLivePresentation(NO);
         dispatch_async(dispatch_get_main_queue(), ^{
             applyLivePresentation(NO);
-            // Keep laying out invisibly while UIKit presents. The transition
-            // controller's presentationTransitionDidEnd: callback performs the
-            // actual capture only after every child has reached final geometry.
+
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.035 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{ applyLivePresentation(NO); });
         });
     }
-    // Expansion reparents portions of the module hierarchy during the opening
-    // transition. Reassert on the next turn so no edit ring or preview backing
-    // survives behind the platter after that reparenting completes.
+
     dispatch_async(dispatch_get_main_queue(), ^{
         [coordinator hideOwnedChromeForExpandedPlatterInOverlay:overlay];
     });
@@ -13534,9 +12845,7 @@ static void CCARestoreCompactMediaLayout(UIViewController *overlay, id sourceObj
 - (void)moduleCollectionViewController:(id)collection didCloseExpandedModule:(id)module {
     UIViewController *overlay = (UIViewController *)(id)self;
     %orig;
-    // Restore the selected page before clearing expanded state or updating any
-    // overlay chrome. Deferring this to the next run-loop turn let page-zero
-    // geometry render for one frame after every later-page dismissal.
+
     CCARestoreExpansionPageGeometrySync(overlay);
     NSString *closingIdentifier = [CCAIdentifierFromObject(module) copy];
     BOOL closingMedia = [closingIdentifier isEqualToString:@"com.apple.mediaremote.controlcenter.nowplaying"] ||
@@ -13571,8 +12880,7 @@ static void CCARestoreCompactMediaLayout(UIViewController *overlay, id sourceObj
         if (closingMedia) CCARestoreCompactMediaLayout(overlay, module, YES);
         [coordinator updatePageIndicatorsForOverlay:overlay];
     });
-    // Give the legit closing choreography time to finish, then scrub any
-    // leftover transition state so the next expansion starts clean.
+
     __weak UIViewController *weakOverlay = overlay;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         if (!gCCAExpandedModuleOpen) CCAResetConnectivityExpansionState(weakOverlay);
@@ -13591,8 +12899,7 @@ static void CCARestoreCompactMediaLayout(UIViewController *overlay, id sourceObj
     UIViewController *overlay = ((UIViewController *)(id)self).parentViewController;
     while (overlay && !CCAIsOverlayController(overlay)) overlay = overlay.parentViewController;
     UIViewController *expandedController = overlay ? CCAModuleControllerMatchingObject(overlay, module) : nil;
-    // This concrete collection callback is guaranteed on iOS 16 even though
-    // the overlay delegate does not implement its optional will-close method.
+
     UIViewController *containerController = [container isKindOfClass:[UIViewController class]] ? (UIViewController *)container : expandedController;
     if (overlay) CCAApplyExpansionPageGeometrySync(overlay);
     gCCAExpandedModuleClosingActive = YES;
@@ -13614,10 +12921,7 @@ static void CCARestoreCompactMediaLayout(UIViewController *overlay, id sourceObj
     BOOL closingMedia = [NSStringFromClass([module class]) isEqualToString:@"MediaControlsModule"] ||
         [[CCAIdentifierFromObject(module) copy] isEqualToString:@"com.apple.mediaremote.controlcenter.nowplaying"];
     if (closingMedia && overlay) {
-        // Freeze the expanded presentation exactly where it is, then return
-        // the live hierarchy to compact layout before Apple's own reverse
-        // transition starts. CCUI's animator retains ownership of the
-        // anchor-to-grid geometry for every supported module size.
+
         CCABeginCompactMediaDismissalProxy(overlay, module);
         CCARestoreCompactMediaLayout(overlay, module, NO);
         CCAAttachCompactMediaSnapshotToNativeTransition();
@@ -13669,12 +12973,7 @@ static void CCAPrefsChanged(__unused CFNotificationCenterRef center, __unused vo
 %ctor {
     @autoreleasepool {
         CCALoadPrefs();
-        // Master switch — the definitive, future-proof disable. With CCAster
-        // off we install no hooks, register no observers, and allocate nothing,
-        // so SpringBoard behaves exactly as if the tweak were not present. Every
-        // current and future feature is covered automatically because nothing
-        // below this line runs. (Toggling the master switch needs a respring to
-        // fully take effect, since hooks can't be uninstalled live.)
+
         if (!gEnabled) return;
         %init(_ungrouped);
         gOverlayControllers = [NSHashTable weakObjectsHashTable];
@@ -13690,8 +12989,7 @@ static void CCAPrefsChanged(__unused CFNotificationCenterRef center, __unused vo
         CFPropertyListRef savedDuplicates = CFPreferencesCopyAppValue(CFSTR("COSMICDuplicateFamilies"), kCCAPrefsDomain);
         gCCADuplicateFamilies = [(__bridge NSDictionary *)savedDuplicates mutableCopy] ?: [NSMutableDictionary dictionary];
         if (savedDuplicates) CFRelease(savedDuplicates);
-        // Connectivity is fixed at Apple's native 2x2 size. Remove builds'
-        // stale 4x2 override without disturbing the user's chosen grid origin.
+
         if (gCCACustomSizes[@"com.apple.control-center.ConnectivityModule"]) {
             [gCCACustomSizes removeObjectForKey:@"com.apple.control-center.ConnectivityModule"];
             CFPreferencesSetAppValue(CFSTR("ModuleGridSizes"), (__bridge CFPropertyListRef)[gCCACustomSizes copy], kCCAPrefsDomain);
