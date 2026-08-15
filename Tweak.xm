@@ -381,8 +381,31 @@ static BOOL CCAIsConnectivityTransitionLeafController(UIViewController *controll
 static void CCASetConnectivityProxyPressed(UIControl *sender, BOOL pressed);
 
 static UIPanGestureRecognizer *CCAFindActiveControlCenterPresentationPan(UIView *root) {
-    (void)controller;
-    return;
+    if (!root) return nil;
+    NSMutableArray<UIView *> *queue = [NSMutableArray arrayWithObject:root];
+    UIPanGestureRecognizer *fallback = nil;
+    while (queue.count) {
+        UIView *view = queue.firstObject;
+        [queue removeObjectAtIndex:0];
+        for (UIGestureRecognizer *gesture in view.gestureRecognizers) {
+            if (![gesture isKindOfClass:[UIPanGestureRecognizer class]] ||
+                [objc_getAssociatedObject(gesture, kCCAOwnGestureKey) boolValue] ||
+                gesture.numberOfTouches == 0 ||
+                (gesture.state != UIGestureRecognizerStateBegan && gesture.state != UIGestureRecognizerStateChanged)) continue;
+            UIPanGestureRecognizer *pan = (UIPanGestureRecognizer *)gesture;
+            CGPoint location = [pan locationInView:root];
+            CGPoint velocity = [pan velocityInView:root];
+            BOOL plausiblePull = location.x >= CGRectGetWidth(root.bounds) * 0.45 &&
+                location.y <= CGRectGetHeight(root.bounds) * 0.72 && velocity.y > -40.0;
+            if (!plausiblePull) continue;
+            NSString *name = NSStringFromClass(pan.class);
+            if ([name containsString:@"PanSystemGestureRecognizer"] ||
+                [name containsString:@"ControlCenter"] || [name containsString:@"StatusBar"]) return pan;
+            if (!fallback) fallback = pan;
+        }
+        [queue addObjectsFromArray:view.subviews];
+    }
+    return fallback;
 }
 
 static NSString *CCAThemedPageIndicatorSymbolForPage(NSUInteger page);
