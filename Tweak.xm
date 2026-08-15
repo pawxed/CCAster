@@ -296,7 +296,7 @@ static CGFloat gCCAPagerInteractiveProgress = 0.0;
 static CFTimeInterval gCCAPagerInteractiveBeganTime = 0.0;
 static CGFloat gCCAPagerHeldScale = 1.0;
 static CGFloat gCCAPagerHeldAlphaFactor = 1.0;
-static CGFloat gCCAPagerViscousProgress = progress;
+static CGFloat gCCAPagerViscousProgress = 0.0;
 static CGFloat gCCAPagerPreviousRawProgress = 0.0;
 static CGFloat gCCAPagerFilteredVelocity = 0.0;
 static CGFloat gCCAPagerJelloScaleX = 1.0;
@@ -382,6 +382,7 @@ static void CCASetConnectivityProxyPressed(UIControl *sender, BOOL pressed);
 
 static UIPanGestureRecognizer *CCAFindActiveControlCenterPresentationPan(UIView *root) {
     (void)controller;
+    return;
 }
 
 static NSString *CCAThemedPageIndicatorSymbolForPage(NSUInteger page);
@@ -2263,6 +2264,7 @@ static void CCADiscardExpansionCompactTransitionAssets(void) {
 }
 
 static void CCAResetGenericExpansionDismissal(void) {
+
     gCCAExpansionDismissalGeneration++;
     CCARestoreHiddenExpansionLiveViews();
     CCADiscardExpandedDismissalSnapshot();
@@ -2272,6 +2274,7 @@ static void CCAResetGenericExpansionDismissal(void) {
 }
 
 static void CCACompleteGenericExpansionDismissalIfReady(void) {
+
     if (!gCCAExpansionDismissalAnimatorFinished || !gCCAExpansionDismissalDidClose) return;
     CCARestoreHiddenExpansionLiveViews();
     CCADiscardExpandedDismissalSnapshot();
@@ -2288,6 +2291,7 @@ static void CCACompleteGenericExpansionDismissalIfReady(void) {
 }
 
 static void CCAFreezeExpandedModuleForDismissal(UIViewController *presented) {
+
     CCADiscardExpandedDismissalSnapshot();
     if (!presented.view || !presented.view.superview || CGRectIsEmpty(presented.view.bounds)) return;
     [presented.view.superview layoutIfNeeded];
@@ -2296,6 +2300,7 @@ static void CCAFreezeExpandedModuleForDismissal(UIViewController *presented) {
 }
 
 static void CCAInstallExpansionDismissalSnapshot(id clickAssistant) {
+
     (void)clickAssistant;
     CCADiscardExpansionDismissalSnapshot();
 }
@@ -4656,7 +4661,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     gCCAPagerScrubbingActive = YES;
     gCCAPagerHeldScale = 1.0;
     gCCAPagerHeldAlphaFactor = 1.0;
-    gCCAPagerViscousProgress = progress;
+    gCCAPagerViscousProgress = (CGFloat)gCCAPagerInteractiveStartPage;
     gCCAPagerPreviousRawProgress = (CGFloat)gCCAPagerInteractiveStartPage;
     gCCAPagerFilteredVelocity = 0.0;
     gCCAPagerJelloScaleX = 1.0;
@@ -4707,178 +4712,59 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     CCAClampNativeScrollViewForOverlay(overlay);
     CGFloat maxProgress = (CGFloat)gCCAPageCount - 1.0;
     CGFloat clamped = MIN(maxProgress, MAX(0.0, progress));
-
     CGFloat physicsProgress = progress;
     if (progress < 0.0) physicsProgress = -log1p(-progress);
     else if (progress > maxProgress) physicsProgress = maxProgress + log1p(progress - maxProgress);
     NSUInteger previousCandidate = gCCACurrentPage;
-
-    CFTimeInterval now = CACurrentMediaTime();
-    CGFloat dt = gCCAPagerLastSampleTime > 0.0 ? (CGFloat)(now - gCCAPagerLastSampleTime) : (1.0 / 60.0);
-    dt = MIN(0.050, MAX(1.0 / 120.0, dt));
-    CGFloat rawVelocity = (physicsProgress - gCCAPagerPreviousRawProgress) / dt;
-    rawVelocity = MIN(8.0, MAX(-8.0, rawVelocity));
-    CGFloat velocityResponse = 1.0 - exp(-dt * kCCAPagerJelloVelocityResponse);
-    gCCAPagerFilteredVelocity += (rawVelocity - gCCAPagerFilteredVelocity) * velocityResponse;
-
-    CGFloat dragResponse = 1.0 - exp(-dt * kCCAPagerViscosityResponse);
-    gCCAPagerViscousProgress += (physicsProgress - gCCAPagerViscousProgress) * dragResponse;
-    CGFloat visualProgress = gCCAPagerViscousProgress;
-    NSUInteger candidate = (NSUInteger)llround(MIN(maxProgress, MAX(0.0, visualProgress)));
+    gCCAPagerViscousProgress = physicsProgress;
+    NSUInteger candidate = (NSUInteger)llround(MIN(maxProgress, MAX(0.0, physicsProgress)));
     BOOL changedPage = candidate != previousCandidate;
     if (changedPage) CCAHaptic();
-    CGFloat pageTension = physicsProgress - visualProgress;
     gCCAPagerPreviousRawProgress = physicsProgress;
-    gCCAPagerLastSampleTime = now;
     gCCAPagerInteractiveProgress = clamped;
     gCCACurrentPage = candidate;
-
-    CGFloat overlayHeight = CGRectGetHeight(overlay.view.bounds);
-    CGFloat scrubHostHeight = kCCAPageIndicatorScrubStep * gCCAPageCount;
-    CGFloat scrubHostMinY = floor((overlayHeight - scrubHostHeight) * 0.5);
-    CGFloat fingerY = scrubHostMinY + touchY;
-    CGFloat translationTarget = 0.0;
-    BOOL endpointPull = NO;
-    if (progress < 0.0) {
-        CGFloat firstIconY = scrubHostMinY + kCCAPageIndicatorScrubStep * 0.5;
-        CGFloat upperLimitY = overlayHeight * 0.10;
-        CGFloat pull = MIN(1.0, MAX(0.0, (firstIconY - fingerY) / MAX(1.0, firstIconY - upperLimitY)));
-        CGFloat eased = 1.0 - pow(1.0 - pull, 1.35);
-        translationTarget = -MIN(100.0, overlayHeight * 0.12) * eased;
-        endpointPull = YES;
-    } else if (progress > maxProgress) {
-        CGFloat lastIconY = scrubHostMinY + ((CGFloat)gCCAPageCount - 0.5) * kCCAPageIndicatorScrubStep;
-        CGFloat lowerLimitY = overlayHeight * 0.90;
-        CGFloat pull = MIN(1.0, MAX(0.0, (fingerY - lastIconY) / MAX(1.0, lowerLimitY - lastIconY)));
-        CGFloat eased = 1.0 - pow(1.0 - pull, 1.35);
-        translationTarget = MIN(100.0, overlayHeight * 0.12) * eased;
-        endpointPull = YES;
-    } else {
-        translationTarget = (visualProgress - (CGFloat)candidate) * 22.0;
-    }
-    if (endpointPull) {
-        gCCAPagerInteractiveTranslation += (translationTarget - gCCAPagerInteractiveTranslation) * dragResponse;
-    } else {
-        gCCAPagerInteractiveTranslation = 0.0;
-    }
-
-    CGFloat entrance = gCCAPagerInteractiveBeganTime > 0.0 ?
-        MIN(1.0, MAX(0.0, (CACurrentMediaTime() - gCCAPagerInteractiveBeganTime) / 0.26)) : 1.0;
-    entrance = entrance * entrance * entrance * (entrance * (entrance * 6.0 - 15.0) + 10.0);
-    CGFloat heldScale = 1.0 - 0.30 * entrance;
+    gCCAPagerInteractiveTranslation = 0.0;
     gCCAPagerHeldScale = 1.0;
     gCCAPagerHeldAlphaFactor = 1.0;
-    CGFloat jelloInput = gCCAPagerFilteredVelocity * kCCAPagerJelloVelocityToScale +
-                         pageTension * kCCAPagerJelloTensionToScale;
-    CGFloat jello = MIN(kCCAPagerMaximumJelloScale,
-                        MAX(-kCCAPagerMaximumJelloScale, jelloInput)) * entrance;
     gCCAPagerJelloScaleX = 1.0;
     gCCAPagerJelloScaleY = 1.0;
+    gCCAPagerFilteredVelocity = 0.0;
     [self applyPageTransformToOverlay:overlay animated:NO];
     if (changedPage) [self updatePagedModuleVisibilityForOverlay:overlay showAdjacent:NO];
-
     UIViewController *collection = [self moduleCollectionControllerInOverlay:overlay];
     CGFloat baseAlpha = [objc_getAssociatedObject(collection.view, kCCAOriginalAlphaKey) doubleValue];
-    collection.view.alpha = baseAlpha * gCCAPagerHeldAlphaFactor;
-    if (gEditModeActive) {
-        CGFloat wrapperProgress = (1.0 - heldScale) / 0.30;
-        CGFloat wrapperX = kCCAEditScrubModuleWrapperCenteringX * wrapperProgress;
-        CGFloat wrapperY = kCCAEditScrubModuleWrapperCenteringY * wrapperProgress;
-        NSMutableSet<NSValue *> *seenWrappers = [NSMutableSet set];
-        for (UIViewController *module in CCACollectModuleControllers(overlay)) {
-            UIView *wrapper = module.view.superview;
-            if (!wrapper || wrapper == collection.view) continue;
-            NSValue *key = [NSValue valueWithNonretainedObject:wrapper];
-            if ([seenWrappers containsObject:key]) continue;
-            [seenWrappers addObject:key];
-            NSValue *baseValue = objc_getAssociatedObject(wrapper, kCCAEditScrubWrapperBaseTransformKey);
-            if (!baseValue) {
-                baseValue = [NSValue valueWithCGAffineTransform:wrapper.transform];
-                objc_setAssociatedObject(wrapper, kCCAEditScrubWrapperBaseTransformKey, baseValue, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            }
-            CGAffineTransform baseWrapper = baseValue.CGAffineTransformValue;
-            wrapper.transform = CGAffineTransformTranslate(baseWrapper,
-                                                           wrapperX,
-                                                           wrapperY);
-        }
-    }
-
-    if (changedPage) {
-
-        CCAEditGridView *grid = gEditModeActive ? [self editGridForPage:candidate overlay:overlay] : nil;
-        if (grid) {
-            [grid.layer removeAnimationForKey:@"CCAsterPagerPopScale"];
-            [grid.layer removeAnimationForKey:@"CCAsterPagerPopFade"];
-            CAKeyframeAnimation *gridScale = [CAKeyframeAnimation animationWithKeyPath:@"transform.scale"];
-            gridScale.values = @[@0.90, @1.025, @1.0];
-            gridScale.keyTimes = @[@0.0, @0.68, @1.0];
-            gridScale.duration = 0.20;
-            gridScale.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
-            [grid.layer addAnimation:gridScale forKey:@"CCAsterPagerPopScale"];
-            CAKeyframeAnimation *gridFade = [CAKeyframeAnimation animationWithKeyPath:@"opacity"];
-            gridFade.values = @[@0.08, @0.86, @1.0];
-            gridFade.keyTimes = @[@0.0, @0.62, @1.0];
-            gridFade.duration = 0.18;
-            gridFade.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
-            [grid.layer addAnimation:gridFade forKey:@"CCAsterPagerPopFade"];
-        }
-        for (UIViewController *module in CCACollectModuleControllers(overlay)) {
-            NSString *identifier = CCAModuleIdentifier(module);
-            NSValue *nativeValue = identifier.length ? gCCANativeLayoutRects[identifier] : nil;
-            if (!nativeValue) continue;
-            CCUILayoutRect rect = {};
-            [nativeValue getValue:&rect];
-            NSArray<NSNumber *> *origin = gCCACustomOrigins[identifier];
-            if (origin.count >= 2) rect.origin = (CCUILayoutPoint){origin[0].unsignedIntegerValue, origin[1].unsignedIntegerValue};
-            if (CCAPageForRect(rect) != candidate) continue;
-            [module.view.layer removeAnimationForKey:@"CCAsterPagerPopScale"];
-            [module.view.layer removeAnimationForKey:@"CCAsterPagerPopFade"];
-            CAKeyframeAnimation *scale = [CAKeyframeAnimation animationWithKeyPath:@"transform.scale"];
-            scale.values = @[@0.90, @1.025, @1.0];
-            scale.keyTimes = @[@0.0, @0.68, @1.0];
-            scale.duration = 0.20;
-            scale.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
-            [module.view.layer addAnimation:scale forKey:@"CCAsterPagerPopScale"];
-            CAKeyframeAnimation *fade = [CAKeyframeAnimation animationWithKeyPath:@"opacity"];
-            fade.values = @[@0.08, @0.86, @1.0];
-            fade.keyTimes = @[@0.0, @0.62, @1.0];
-            fade.duration = 0.18;
-            fade.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
-            [module.view.layer addAnimation:fade forKey:@"CCAsterPagerPopFade"];
-        }
-    }
-
+    collection.view.alpha = baseAlpha;
     UIView *host = [overlay.view viewWithTag:kCCAPageIndicatorHostTag];
     CGFloat itemHeight = kCCAPageIndicatorScrubStep;
     CGFloat hostHeight = itemHeight * gCCAPageCount;
-    CGFloat hostMinY = scrubHostMinY;
+    CGFloat scrubHostMinY = floor((CGRectGetHeight(overlay.view.bounds) - hostHeight) * 0.5);
     void (^layoutPager)(void) = ^{
         host.frame = CGRectMake(CGRectGetWidth(overlay.view.bounds) - kCCAPageIndicatorScrubHostWidth - kCCAPageIndicatorScrubRightInset,
-                                hostMinY,
+                                scrubHostMinY,
                                 kCCAPageIndicatorScrubHostWidth,
                                 hostHeight);
         [host.subviews enumerateObjectsUsingBlock:^(__kindof UIView *button, NSUInteger page, __unused BOOL *stop) {
-        button.bounds = CGRectMake(0.0, 0.0, kCCAPageIndicatorScrubHostWidth, itemHeight);
-        CGFloat centerY = ((CGFloat)page + 0.5) * itemHeight;
-        BOOL selected = page == candidate;
-        CGFloat proximity = MAX(0.0, 1.0 - fabs(touchY - centerY) / (gEditModeActive ? 92.0 : 78.0));
-        if (gEditModeActive) proximity = selected ? MAX(0.72, proximity) : proximity * 0.58;
-        CGFloat scale = 1.18 + 1.68 * proximity + (selected ? 0.18 : 0.0);
-        CGFloat pointSize = MIN(38.0, CCAPageIndicatorBasePointSizeForPage(page) * scale);
-        UIImageSymbolConfiguration *configuration = [UIImageSymbolConfiguration configurationWithPointSize:pointSize weight:UIImageSymbolWeightSemibold];
-        [(UIButton *)button setImage:[UIImage systemImageNamed:CCAPageIndicatorSymbolForPage(page) withConfiguration:configuration] forState:UIControlStateNormal];
-        CGFloat slideOut = kCCAPageIndicatorMaxSlideOut * proximity;
-        CGFloat targetAlpha = MIN(1.0, (selected ? 0.86 : 0.28) + 0.36 * proximity);
-        CGFloat tintWhite = selected ? 1.0 : (0.12 + 0.72 * proximity);
-        UIColor *targetTint = [UIColor colorWithWhite:tintWhite alpha:selected || proximity > 0.58 ? 1.0 : 0.88];
-        button.alpha = targetAlpha;
-        button.tintColor = targetTint;
-        button.center = CGPointMake(kCCAPageIndicatorScrubHostWidth * 0.5 - slideOut, centerY);
-        button.transform = CGAffineTransformIdentity;
-    }];
+            button.bounds = CGRectMake(0.0, 0.0, kCCAPageIndicatorScrubHostWidth, itemHeight);
+            CGFloat centerY = ((CGFloat)page + 0.5) * itemHeight;
+            BOOL selected = page == candidate;
+            CGFloat proximity = MAX(0.0, 1.0 - fabs(touchY - centerY) / (gEditModeActive ? 92.0 : 78.0));
+            if (gEditModeActive) proximity = selected ? MAX(0.72, proximity) : proximity * 0.58;
+            CGFloat scale = 1.18 + 1.68 * proximity + (selected ? 0.18 : 0.0);
+            CGFloat pointSize = MIN(38.0, CCAPageIndicatorBasePointSizeForPage(page) * scale);
+            UIImageSymbolConfiguration *configuration = [UIImageSymbolConfiguration configurationWithPointSize:pointSize weight:UIImageSymbolWeightSemibold];
+            [(UIButton *)button setImage:[UIImage systemImageNamed:CCAPageIndicatorSymbolForPage(page) withConfiguration:configuration] forState:UIControlStateNormal];
+            CGFloat slideOut = kCCAPageIndicatorMaxSlideOut * proximity;
+            CGFloat targetAlpha = MIN(1.0, (selected ? 0.86 : 0.28) + 0.36 * proximity);
+            CGFloat tintWhite = selected ? 1.0 : (0.12 + 0.72 * proximity);
+            UIColor *targetTint = [UIColor colorWithWhite:tintWhite alpha:selected || proximity > 0.58 ? 1.0 : 0.88];
+            button.alpha = targetAlpha;
+            button.tintColor = targetTint;
+            button.center = CGPointMake(kCCAPageIndicatorScrubHostWidth * 0.5 - slideOut, centerY);
+            button.transform = CGAffineTransformIdentity;
+        }];
     };
     if (gEditModeActive) {
-        [UIView animateWithDuration:0.0 delay:0.0 options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction animations:layoutPager completion:nil];
+        [UIView animateWithDuration:0.0 delay:0.0 options:0 animations:layoutPager completion:nil];
     } else {
         layoutPager();
     }
@@ -4940,7 +4826,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
         objc_setAssociatedObject(collection.view, kCCAScrubCollectionBoundsKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(collection.view, kCCAScrubCollectionPositionKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         CCAReassertNativeScrollClampForOverlay(overlay);
-        gCCAPagerViscousProgress = progress;
+        gCCAPagerViscousProgress = (CGFloat)target;
         gCCAPagerFilteredVelocity = 0.0;
         gCCAPagerLastSampleTime = 0.0;
         UIView *host = [overlay.view viewWithTag:kCCAPageIndicatorHostTag];
@@ -5382,7 +5268,7 @@ static NSUInteger CCADerivedVisiblePageForOverlay(UIViewController *overlay) {
     if ((startPage == 0 && translation.y > 0.0) || (startPage + 1 >= gCCAPageCount && translation.y < 0.0)) translation.y *= 0.24;
     if (gesture.state == UIGestureRecognizerStateChanged) {
         gCCACurrentPage = startPage;
-        gCCAPagerInteractiveTranslation = 0.0;
+        gCCAPagerInteractiveTranslation = translation.y;
         [self applyPageTransformToOverlay:overlay animated:NO];
         [self updateTopFadeForOverlay:overlay presentationAlpha:1.0];
         if (gEditModeActive) [self updateEditControlFramesForOverlay:overlay];
